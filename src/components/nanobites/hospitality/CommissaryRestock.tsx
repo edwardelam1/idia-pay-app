@@ -1798,6 +1798,10 @@ function RestockManifest({
       toast.error("Every visible row needs a count before submit.");
       return;
     }
+    if (!locationId) {
+      toast.error("No active location bound to this terminal.");
+      return;
+    }
     setSubmitting(true);
     const user = await supabase.auth.getUser();
     const userId = user.data.user?.id ?? null;

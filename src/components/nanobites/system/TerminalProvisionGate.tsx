@@ -64,10 +64,19 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
 
   const handleProvision = async (e: React.FormEvent) => {
     e.preventDefault();
-    logPlanck("START", "DEVICE_PROVISIONING", `Attempting to bind terminal with code: ${code}`);
+    const LOG_ID = `PROV_GATE_${Date.now()}`;
+    logPlanck(
+      "START",
+      "DEVICE_PROVISIONING",
+      `[BEGIN] [${LOG_ID}] Attempting to bind terminal with code: ${code}`,
+    );
 
     if (!code.trim() || code.length < 5) {
-      logPlanck("STALL", "VALIDATION_FAIL", "Invalid provisioning code format.");
+      logPlanck(
+        "STALL",
+        "VALIDATION_FAIL",
+        `[ERROR_BEGIN] [${LOG_ID}] Invalid provisioning code format.`,
+      );
       toast.error("Invalid provisioning code format.");
       return;
     }
@@ -76,49 +85,117 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
     const sanitizedCode = code.trim().toUpperCase();
 
     try {
-      logPlanck("PROCESS", "PROVISION_LOOKUP", "Querying authoritative ledger.");
+      logPlanck(
+        "PROCESS",
+        "PROVISION_LOOKUP",
+        `[STEP] [${LOG_ID}] Querying authoritative ledger.`,
+      );
 
       let targetBusiness: { id: string; name: string } | null = null;
       const db = supabase as unknown as {
         from: (t: string) => {
           select: (c: string) => {
-            contains: (col: string, val: unknown) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> };
-            eq: (col: string, val: unknown) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> };
+            contains: (
+              col: string,
+              val: unknown,
+            ) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> };
+            eq: (
+              col: string,
+              val: unknown,
+            ) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> };
           };
         };
       };
 
-      // ATTEMPT A: multi-issue codes column (jsonb/text[]: provisioning_codes)
-      try {
-        const { data: arrayData } = await db
+      // ATTEMPT A: device_provisioning_blueprints (source of truth for active Hub schemas)
+      logPlanck(
+        "PROCESS",
+        "PROVISION_LOOKUP",
+        `[STEP] [${LOG_ID}] Checking device_provisioning_blueprints.`,
+      );
+      const { data: blueprintRaw } = await db
+        .from("device_provisioning_blueprints")
+        .select("business_id, status")
+        .eq("code", sanitizedCode)
+        .maybeSingle();
+      const blueprintData = blueprintRaw as
+        | { business_id: string; status: string }
+        | null;
+
+      if (blueprintData) {
+        if (blueprintData.status !== "active") {
+          logPlanck(
+            "STALL",
+            "PROVISION_FAILED",
+            `[ERROR_BEGIN] [${LOG_ID}] Schema is inactive.`,
+          );
+          toast.error("This provisioning code is deactivated. Check IDIA Hub.");
+          setIsProcessing(false);
+          return;
+        }
+        const { data: busRaw } = await db
           .from("businesses")
           .select("id, name")
-          .contains("provisioning_codes", [sanitizedCode])
+          .eq("id", blueprintData.business_id)
           .maybeSingle();
-        if (arrayData) targetBusiness = arrayData as { id: string; name: string };
-      } catch (arrErr) {
-        logPlanck("STALL", "PROVISION_LOOKUP", "Array column unavailable; falling back.", arrErr);
+        if (busRaw) targetBusiness = busRaw as { id: string; name: string };
       }
 
-      // ATTEMPT B: legacy single-string column
+      // ATTEMPT B: multi-issue codes column (legacy fallback)
       if (!targetBusiness) {
-        const { data: singleData, error: singleError } = await db
+        logPlanck(
+          "PROCESS",
+          "PROVISION_LOOKUP",
+          `[STEP] [${LOG_ID}] Checking businesses.provisioning_codes array.`,
+        );
+        try {
+          const { data: arrayData } = await db
+            .from("businesses")
+            .select("id, name")
+            .contains("provisioning_codes", [sanitizedCode])
+            .maybeSingle();
+          if (arrayData) targetBusiness = arrayData as { id: string; name: string };
+        } catch (arrErr) {
+          logPlanck(
+            "STALL",
+            "PROVISION_LOOKUP",
+            `[ERROR_DETAIL] [${LOG_ID}] Array column unavailable; falling back.`,
+            arrErr,
+          );
+        }
+      }
+
+      // ATTEMPT C: legacy single-string column (account-creation fallback)
+      if (!targetBusiness) {
+        logPlanck(
+          "PROCESS",
+          "PROVISION_LOOKUP",
+          `[STEP] [${LOG_ID}] Checking businesses.provisioning_code string.`,
+        );
+        const { data: singleData } = await db
           .from("businesses")
           .select("id, name")
           .eq("provisioning_code", sanitizedCode)
           .maybeSingle();
-        if (singleError) throw singleError as Error;
         if (singleData) targetBusiness = singleData as { id: string; name: string };
       }
 
       if (!targetBusiness) {
-        logPlanck("STALL", "PROVISION_FAILED", "No business found for code.");
+        logPlanck(
+          "STALL",
+          "PROVISION_FAILED",
+          `[ERROR_BEGIN] [${LOG_ID}] No business found for code.`,
+        );
         toast.error("Provisioning code not recognized. Verify with your Org Admin.");
         setIsProcessing(false);
         return;
       }
 
-      logPlanck("END", "PROVISION_SUCCESS", `Device bound to Business: ${targetBusiness.id}`);
+      logPlanck(
+        "END",
+        "PROVISION_SUCCESS",
+        `[SUCCESS] [${LOG_ID}] Device bound to Business: ${targetBusiness.id}`,
+      );
 
       HardwareStorage.setItem("idia_provisioned_business_id", targetBusiness.id);
       HardwareStorage.setItem("idia_provisioned_business_name", targetBusiness.name);
@@ -127,7 +204,13 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       toast.success(`Terminal successfully linked to ${targetBusiness.name}`);
       onProvisioned(targetBusiness.id, targetBusiness.name);
     } catch (err: unknown) {
-      logPlanck("STALL", "DEVICE_PROVISIONING", "Database lookup failed.", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      logPlanck(
+        "STALL",
+        "DEVICE_PROVISIONING",
+        `[ERROR_BEGIN] [${LOG_ID}] Database lookup failed. [ERROR_DETAIL] ${msg}`,
+        err,
+      );
       toast.error("System Error: Could not verify provisioning code.");
       setIsProcessing(false);
     }
