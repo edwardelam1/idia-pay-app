@@ -490,6 +490,23 @@ export default function CommissaryRestockFactory({
                         }}
                       />
                     )}
+                    {id === "RESTOCK_MANIFEST" && (
+                      <RestockManifest
+                        items={inventory}
+                        businessId={businessId}
+                        locationId={locationId}
+                        onComplete={() => {
+                          void syncLedger();
+                          setActiveIdx(0);
+                        }}
+                      />
+                    )}
+                    {id === "RECIPE_ENGINE" && (
+                      <RecipeEngine
+                        items={inventory}
+                        businessId={businessId}
+                      />
+                    )}
                   </div>
                 </ScrollArea>
 
