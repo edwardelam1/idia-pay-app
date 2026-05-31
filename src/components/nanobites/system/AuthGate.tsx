@@ -125,11 +125,23 @@ function AuthGateCore({ onUnprovisionDevice }: AuthGateProps) {
         type: "email",
       });
       if (error) throw error;
+      toast.success("Clearance granted. Deploying terminal...");
       // Success triggers onAuthStateChange in TenancyProvider.
     } catch (err: unknown) {
       logPlanck("STALL", "AUTH_VERIFY", "Verification failed.", err);
-      const message = err instanceof Error ? err.message : "Authentication sequence failed.";
-      toast.error(message);
+      const e = err as { status?: number; code?: string; message?: string };
+      const raw = (e?.message || "").toLowerCase();
+      const code = e?.code || "";
+      let friendly = "Authentication sequence failed.";
+      if (code === "otp_expired" || /expired|invalid/.test(raw)) {
+        friendly =
+          "Code expired, already used, or invalid. TTL is 1 hour — request a fresh code (wait ~60s if rate-limited).";
+      } else if (e?.status === 429 || /rate limit/.test(raw)) {
+        friendly = "Too many attempts. Wait ~60s before retrying.";
+      } else if (e?.message) {
+        friendly = e.message;
+      }
+      toast.error(friendly, { duration: 8000 });
       setOtp("");
       setIsProcessing(false);
     }
