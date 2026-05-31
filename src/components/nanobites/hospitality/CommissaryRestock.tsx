@@ -1688,3 +1688,779 @@ function EmptyState({ label }: { label: string }) {
     </div>
   );
 }
+
+// ============================================================================
+// RESTOCK MANIFEST (ODM-driven, category-tabbed)
+// ============================================================================
+type ManifestCategory = "Perishables" | "Dry Goods" | "Packaging";
+
+interface DemandRow {
+  id: string;
+  inventory_item_id: string;
+  quantity_needed: number;
+  status: string;
+}
+
+function classifyItem(it: InventoryItem): ManifestCategory {
+  const storage = (it.storage_requirements ?? "").toLowerCase();
+  const cat = (it.category ?? "").toLowerCase();
+  if (cat.includes("packag") || cat.includes("disposable") || cat.includes("supplies")) {
+    return "Packaging";
+  }
+  if (
+    storage.includes("cooler") ||
+    storage.includes("freezer") ||
+    storage.includes("refriger") ||
+    cat.includes("produce") ||
+    cat.includes("dairy") ||
+    cat.includes("meat") ||
+    cat.includes("seafood")
+  ) {
+    return "Perishables";
+  }
+  return "Dry Goods";
+}
+
+function RestockManifest({
+  items,
+  businessId,
+  locationId,
+  onComplete,
+}: {
+  items: InventoryItem[];
+  businessId: string;
+  locationId: string | null;
+  onComplete: () => void;
+}) {
+  const [tab, setTab] = useState<ManifestCategory>("Perishables");
+  const [demand, setDemand] = useState<Record<string, DemandRow[]>>({});
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadDemand = useCallback(async () => {
+    PicoLog("Manifest_Load", "BEGIN", { businessId });
+    setLoading(true);
+    try {
+      PicoLog("Manifest_Load", "STEP", "Query inventory_demand pending_restock");
+      const { data, error } = await (supabase as unknown as {
+        from: (t: string) => {
+          select: (cols: string) => {
+            eq: (c: string, v: string) => {
+              eq: (c: string, v: string) => Promise<{
+                data: DemandRow[] | null;
+                error: { message: string } | null;
+              }>;
+            };
+          };
+        };
+      })
+        .from("inventory_demand")
+        .select("id,inventory_item_id,quantity_needed,status")
+        .eq("business_id", businessId)
+        .eq("status", "pending_restock");
+      if (error) throw new Error(error.message);
+      const grouped: Record<string, DemandRow[]> = {};
+      for (const r of data ?? []) {
+        (grouped[r.inventory_item_id] ??= []).push(r);
+      }
+      setDemand(grouped);
+      PicoLog("Manifest_Load", "SUCCESS", { rows: data?.length ?? 0 });
+    } catch (e) {
+      PicoLog("Manifest_Load", "ERROR_BEGIN");
+      PicoLog("Manifest_Load", "ERROR_DETAIL", (e as Error).message);
+      PicoLog("Manifest_Load", "ERROR_END");
+      toast.error(`Demand load stall: ${(e as Error).message}`);
+    } finally {
+      setLoading(false);
+      PicoLog("Manifest_Load", "END");
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    void loadDemand();
+  }, [loadDemand]);
+
+  const visible = useMemo(
+    () => items.filter((it) => classifyItem(it) === tab),
+    [items, tab],
+  );
+
+  const allFilled = visible.every((it) => (counts[it.id] ?? 0) > 0);
+
+  const submit = async () => {
+    PicoLog("Manifest_Submit", "BEGIN", { category: tab, count: visible.length });
+    if (!visible.length) {
+      toast.error("No items in this category.");
+      return;
+    }
+    if (!allFilled) {
+      toast.error("Every visible row needs a count before submit.");
+      return;
+    }
+    setSubmitting(true);
+    const user = await supabase.auth.getUser();
+    const userId = user.data.user?.id ?? null;
+    try {
+      for (const it of visible) {
+        const qty = counts[it.id] ?? 0;
+        PicoLog("Manifest_Submit", "STEP", { sku: it.vendor_sku, itemId: it.id, qty });
+        try {
+          const before = Math.round(it.current_stock ?? 0);
+          const after = before + qty;
+          const adj = await supabase.from("inventory_adjustments").insert({
+            business_id: businessId,
+            location_id: locationId,
+            inventory_item_id: it.id,
+            adjustment_number: makeAdjustmentNumber("RST"),
+            adjustment_type: "restock",
+            quantity_before: before,
+            adjustment_quantity: qty,
+            quantity_after: after,
+            unit_cost: it.current_cost ?? 0,
+            total_value: (it.current_cost ?? 0) * qty,
+            reason: "ODM Shift Fulfillment",
+            created_by: userId,
+          });
+          if (adj.error) throw new Error(`adjust:${adj.error.message}`);
+
+          const upd = await supabase
+            .from("inventory_items")
+            .update({ current_stock: after })
+            .eq("id", it.id);
+          if (upd.error) throw new Error(`stock:${upd.error.message}`);
+
+          const demandRows = demand[it.id] ?? [];
+          if (demandRows.length > 0) {
+            const ids = demandRows.map((d) => d.id);
+            const flip = await (supabase as unknown as {
+              from: (t: string) => {
+                update: (v: Record<string, unknown>) => {
+                  in: (c: string, vs: string[]) => Promise<{
+                    error: { message: string } | null;
+                  }>;
+                };
+              };
+            })
+              .from("inventory_demand")
+              .update({ status: "fulfilled", fulfilled_at: new Date().toISOString() })
+              .in("id", ids);
+            if (flip.error) throw new Error(`demand:${flip.error.message}`);
+          }
+          PicoLog("Manifest_Submit", "SUCCESS", { itemId: it.id, after });
+        } catch (rowErr) {
+          PicoLog("Manifest_Submit", "ERROR_BEGIN", { itemId: it.id });
+          PicoLog("Manifest_Submit", "ERROR_DETAIL", (rowErr as Error).message);
+          PicoLog("Manifest_Submit", "ERROR_END", { itemId: it.id });
+          throw rowErr;
+        }
+      }
+      haptic("heavy");
+      toast.success(`${tab} manifest fulfilled.`);
+      onComplete();
+    } catch (e) {
+      toast.error(`Manifest stall: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+      PicoLog("Manifest_Submit", "END");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <RefreshCw className="h-6 w-6 animate-spin text-[#007AFF]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-2xl font-black tracking-tight text-[#1D1D1F]">
+          Restock Manifest
+        </h3>
+        <p className="text-xs font-bold text-[#86868B]">
+          Live ODM demand from the truck · {Object.keys(demand).length} item
+          {Object.keys(demand).length === 1 ? "" : "s"} flagged
+        </p>
+      </div>
+
+      <div className="flex gap-2 rounded-2xl bg-[#F2F2F7] p-1">
+        {(["Perishables", "Dry Goods", "Packaging"] as ManifestCategory[]).map(
+          (c) => (
+            <button
+              key={c}
+              onClick={() => {
+                setTab(c);
+                haptic();
+              }}
+              className={`flex-1 rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest transition-colors ${
+                tab === c
+                  ? "bg-white text-[#1D1D1F] shadow"
+                  : "text-[#86868B]"
+              }`}
+            >
+              {c}
+            </button>
+          ),
+        )}
+      </div>
+
+      {visible.length === 0 ? (
+        <EmptyState label={`No ${tab} on the ledger.`} />
+      ) : (
+        <div className="space-y-2">
+          {visible.map((it) => {
+            const demandRows = demand[it.id] ?? [];
+            const needed = demandRows.reduce(
+              (s, d) => s + Number(d.quantity_needed ?? 0),
+              0,
+            );
+            return (
+              <div
+                key={it.id}
+                className="flex items-center justify-between rounded-2xl bg-white p-3 ring-1 ring-[#F2F2F7]"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-black text-[#1D1D1F]">
+                    {it.name}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#86868B]">
+                      {it.unit_of_measure ?? "Each"} · stock{" "}
+                      {it.current_stock ?? 0}
+                    </p>
+                    {needed > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-amber-800">
+                        Needs {needed}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Stepper
+                  value={counts[it.id] ?? 0}
+                  onChange={(v) =>
+                    setCounts((c) => ({ ...c, [it.id]: v }))
+                  }
+                  compact
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        disabled={submitting || !allFilled || visible.length === 0}
+        onClick={() => void submit()}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#007AFF] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg active:scale-[0.98] disabled:bg-[#D2D2D7]"
+      >
+        <Save className="h-4 w-4" />
+        {submitting ? "Submitting…" : `Fulfill ${tab}`}
+      </button>
+    </div>
+  );
+}
+
+// ============================================================================
+// RECIPE ENGINE (base ingredients + POS modifier groups)
+// ============================================================================
+interface RecipeIngredient {
+  inventory_item_id: string;
+  quantity: number;
+  uom: string;
+}
+interface ModifierOption {
+  id: string;
+  label: string;
+  priceDelta: number;
+  inventory_item_id: string | null;
+  quantity: number;
+  uom: string;
+}
+interface ModifierGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  options: ModifierOption[];
+}
+interface MenuItemRow {
+  id: string;
+  name: string;
+  base_price: number | null;
+  recipe_ingredients: RecipeIngredient[] | null;
+  modifier_groups: ModifierGroup[] | null;
+}
+
+function makeId(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function RecipeEngine({
+  items,
+  businessId,
+}: {
+  items: InventoryItem[];
+  businessId: string;
+}) {
+  const [menu, setMenu] = useState<MenuItemRow[]>([]);
+  const [selected, setSelected] = useState<MenuItemRow | null>(null);
+  const [tab, setTab] = useState<"base" | "mods">("base");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const loadMenu = useCallback(async () => {
+    PicoLog("Recipe_Load", "BEGIN", { businessId });
+    setLoading(true);
+    try {
+      PicoLog("Recipe_Load", "STEP", "Query menu_items");
+      const { data, error } = await (supabase as unknown as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (k: string, v: string) => {
+              order: (c: string, o: { ascending: boolean }) => Promise<{
+                data: MenuItemRow[] | null;
+                error: { message: string } | null;
+              }>;
+            };
+          };
+        };
+      })
+        .from("menu_items")
+        .select("id,name,base_price,recipe_ingredients,modifier_groups")
+        .eq("business_id", businessId)
+        .order("name", { ascending: true });
+      if (error) throw new Error(error.message);
+      setMenu(data ?? []);
+      PicoLog("Recipe_Load", "SUCCESS", { count: data?.length ?? 0 });
+    } catch (e) {
+      PicoLog("Recipe_Load", "ERROR_BEGIN");
+      PicoLog("Recipe_Load", "ERROR_DETAIL", (e as Error).message);
+      PicoLog("Recipe_Load", "ERROR_END");
+      toast.error(`Menu load stall: ${(e as Error).message}`);
+    } finally {
+      setLoading(false);
+      PicoLog("Recipe_Load", "END");
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    void loadMenu();
+  }, [loadMenu]);
+
+  const itemMap = useMemo(() => {
+    const m = new Map<string, InventoryItem>();
+    items.forEach((i) => m.set(i.id, i));
+    return m;
+  }, [items]);
+
+  const updateSelected = (patch: Partial<MenuItemRow>) =>
+    setSelected((s) => (s ? { ...s, ...patch } : s));
+
+  const save = async () => {
+    if (!selected) return;
+    PicoLog("Recipe_Save", "BEGIN", { menuId: selected.id });
+    setSaving(true);
+    try {
+      PicoLog("Recipe_Save", "STEP", "Commit menu_items.recipe_ingredients + modifier_groups");
+      const { error } = await (supabase as unknown as {
+        from: (t: string) => {
+          update: (v: Record<string, unknown>) => {
+            eq: (c: string, v: string) => Promise<{
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      })
+        .from("menu_items")
+        .update({
+          recipe_ingredients: selected.recipe_ingredients ?? [],
+          modifier_groups: selected.modifier_groups ?? [],
+        })
+        .eq("id", selected.id);
+      if (error) throw new Error(error.message);
+      PicoLog("Recipe_Save", "SUCCESS", { menuId: selected.id });
+      haptic("heavy");
+      toast.success("Recipe published.");
+      await loadMenu();
+      setSelected(null);
+    } catch (e) {
+      PicoLog("Recipe_Save", "ERROR_BEGIN");
+      PicoLog("Recipe_Save", "ERROR_DETAIL", (e as Error).message);
+      PicoLog("Recipe_Save", "ERROR_END");
+      toast.error(`Recipe stall: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+      PicoLog("Recipe_Save", "END");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <RefreshCw className="h-6 w-6 animate-spin text-[#007AFF]" />
+      </div>
+    );
+  }
+
+  if (!selected) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-2xl font-black tracking-tight text-[#1D1D1F]">
+            Recipe Engine
+          </h3>
+          <p className="text-xs font-bold text-[#86868B]">
+            {menu.length} menu item{menu.length === 1 ? "" : "s"} · pick one to edit
+          </p>
+        </div>
+        {menu.length === 0 ? (
+          <EmptyState label="No menu items found." />
+        ) : (
+          <div className="space-y-2">
+            {menu.map((m) => {
+              const base = (m.recipe_ingredients ?? []).length;
+              const mods = (m.modifier_groups ?? []).length;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setSelected({
+                      ...m,
+                      recipe_ingredients: m.recipe_ingredients ?? [],
+                      modifier_groups: m.modifier_groups ?? [],
+                    });
+                    setTab("base");
+                    haptic();
+                  }}
+                  className="flex w-full items-center justify-between rounded-2xl bg-white p-4 ring-1 ring-[#F2F2F7] active:scale-[0.98]"
+                >
+                  <div className="min-w-0 text-left">
+                    <p className="truncate text-sm font-black text-[#1D1D1F]">
+                      {m.name}
+                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#86868B]">
+                      {base} ingredient{base === 1 ? "" : "s"} · {mods} modifier group
+                      {mods === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-[#86868B]" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const recipe = selected.recipe_ingredients ?? [];
+  const groups = selected.modifier_groups ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setSelected(null)}
+          className="flex h-10 items-center gap-1 rounded-full bg-[#F2F2F7] px-4 text-[11px] font-black uppercase tracking-widest text-[#1D1D1F]"
+        >
+          <ChevronLeft className="h-4 w-4" /> Menu
+        </button>
+        <p className="truncate text-sm font-black text-[#1D1D1F]">
+          {selected.name}
+        </p>
+      </div>
+
+      <div className="flex gap-2 rounded-2xl bg-[#F2F2F7] p-1">
+        {(
+          [
+            ["base", "Base Recipe"],
+            ["mods", "POS Modifiers"],
+          ] as Array<["base" | "mods", string]>
+        ).map(([k, l]) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className={`flex-1 rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest ${
+              tab === k ? "bg-white text-[#1D1D1F] shadow" : "text-[#86868B]"
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab === "base" && (
+        <div className="space-y-2">
+          {recipe.map((ing, idx) => {
+            const inv = itemMap.get(ing.inventory_item_id);
+            return (
+              <div
+                key={idx}
+                className="space-y-2 rounded-2xl bg-white p-3 ring-1 ring-[#F2F2F7]"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="truncate text-sm font-black text-[#1D1D1F]">
+                    {inv?.name ?? "Unknown item"}
+                  </p>
+                  <button
+                    onClick={() =>
+                      updateSelected({
+                        recipe_ingredients: recipe.filter((_, i) => i !== idx),
+                      })
+                    }
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F2F2F7]"
+                    aria-label="Remove ingredient"
+                  >
+                    <X className="h-4 w-4 text-[#1D1D1F]" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={String(ing.quantity)}
+                    onChange={(e) => {
+                      const next = [...recipe];
+                      next[idx] = { ...ing, quantity: Number(e.target.value) || 0 };
+                      updateSelected({ recipe_ingredients: next });
+                    }}
+                    className="h-11 w-24 rounded-xl"
+                  />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#86868B]">
+                    {ing.uom}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+          <select
+            value=""
+            onChange={(e) => {
+              const id = e.target.value;
+              if (!id) return;
+              const inv = itemMap.get(id);
+              if (!inv) return;
+              updateSelected({
+                recipe_ingredients: [
+                  ...recipe,
+                  {
+                    inventory_item_id: id,
+                    quantity: 1,
+                    uom: inv.unit_of_measure ?? "Each",
+                  },
+                ],
+              });
+            }}
+            className="h-12 w-full rounded-2xl bg-[#F2F2F7] px-4 text-sm font-bold text-[#1D1D1F]"
+          >
+            <option value="">+ Add base ingredient…</option>
+            {items.map((it) => (
+              <option key={it.id} value={it.id}>
+                {it.name} ({it.unit_of_measure ?? "Each"})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {tab === "mods" && (
+        <div className="space-y-3">
+          {groups.map((g, gi) => (
+            <div
+              key={g.id}
+              className="space-y-2 rounded-2xl bg-white p-3 ring-1 ring-[#F2F2F7]"
+            >
+              <div className="flex items-center gap-2">
+                <Input
+                  value={g.name}
+                  placeholder="Group name (e.g. Choose a sauce)"
+                  onChange={(e) => {
+                    const next = [...groups];
+                    next[gi] = { ...g, name: e.target.value };
+                    updateSelected({ modifier_groups: next });
+                  }}
+                  className="h-11 flex-1 rounded-xl"
+                />
+                <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#86868B]">
+                  Required
+                  <Switch
+                    checked={g.required}
+                    onCheckedChange={(v) => {
+                      const next = [...groups];
+                      next[gi] = { ...g, required: v };
+                      updateSelected({ modifier_groups: next });
+                    }}
+                  />
+                </label>
+                <button
+                  onClick={() =>
+                    updateSelected({
+                      modifier_groups: groups.filter((_, i) => i !== gi),
+                    })
+                  }
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F2F2F7]"
+                  aria-label="Remove group"
+                >
+                  <X className="h-4 w-4 text-[#1D1D1F]" />
+                </button>
+              </div>
+              {g.options.map((opt, oi) => {
+                const inv = opt.inventory_item_id
+                  ? itemMap.get(opt.inventory_item_id)
+                  : null;
+                return (
+                  <div
+                    key={opt.id}
+                    className="space-y-2 rounded-xl bg-[#F2F2F7] p-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={opt.label}
+                        placeholder="Option label"
+                        onChange={(e) => {
+                          const next = [...groups];
+                          const opts = [...g.options];
+                          opts[oi] = { ...opt, label: e.target.value };
+                          next[gi] = { ...g, options: opts };
+                          updateSelected({ modifier_groups: next });
+                        }}
+                        className="h-10 flex-1 rounded-lg bg-white"
+                      />
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={String(opt.priceDelta)}
+                        onChange={(e) => {
+                          const next = [...groups];
+                          const opts = [...g.options];
+                          opts[oi] = {
+                            ...opt,
+                            priceDelta: Number(e.target.value) || 0,
+                          };
+                          next[gi] = { ...g, options: opts };
+                          updateSelected({ modifier_groups: next });
+                        }}
+                        className="h-10 w-20 rounded-lg bg-white text-center"
+                      />
+                      <button
+                        onClick={() => {
+                          const next = [...groups];
+                          next[gi] = {
+                            ...g,
+                            options: g.options.filter((_, i) => i !== oi),
+                          };
+                          updateSelected({ modifier_groups: next });
+                        }}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-white"
+                        aria-label="Remove option"
+                      >
+                        <X className="h-4 w-4 text-[#1D1D1F]" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={opt.inventory_item_id ?? ""}
+                        onChange={(e) => {
+                          const id = e.target.value || null;
+                          const inv2 = id ? itemMap.get(id) : null;
+                          const next = [...groups];
+                          const opts = [...g.options];
+                          opts[oi] = {
+                            ...opt,
+                            inventory_item_id: id,
+                            uom: inv2?.unit_of_measure ?? opt.uom,
+                          };
+                          next[gi] = { ...g, options: opts };
+                          updateSelected({ modifier_groups: next });
+                        }}
+                        className="h-10 flex-1 rounded-lg bg-white px-2 text-xs font-bold"
+                      >
+                        <option value="">No consumption</option>
+                        {items.map((it) => (
+                          <option key={it.id} value={it.id}>
+                            {it.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={String(opt.quantity)}
+                        onChange={(e) => {
+                          const next = [...groups];
+                          const opts = [...g.options];
+                          opts[oi] = {
+                            ...opt,
+                            quantity: Number(e.target.value) || 0,
+                          };
+                          next[gi] = { ...g, options: opts };
+                          updateSelected({ modifier_groups: next });
+                        }}
+                        className="h-10 w-20 rounded-lg bg-white text-center"
+                      />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#86868B]">
+                        {inv?.unit_of_measure ?? opt.uom}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => {
+                  const next = [...groups];
+                  next[gi] = {
+                    ...g,
+                    options: [
+                      ...g.options,
+                      {
+                        id: makeId("opt"),
+                        label: "",
+                        priceDelta: 0,
+                        inventory_item_id: null,
+                        quantity: 0,
+                        uom: "Each",
+                      },
+                    ],
+                  };
+                  updateSelected({ modifier_groups: next });
+                }}
+                className="flex w-full items-center justify-center gap-1 rounded-xl bg-[#F2F2F7] py-2 text-[11px] font-black uppercase tracking-widest text-[#1D1D1F]"
+              >
+                <Plus className="h-3 w-3" /> Option
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() =>
+              updateSelected({
+                modifier_groups: [
+                  ...groups,
+                  {
+                    id: makeId("grp"),
+                    name: "",
+                    required: false,
+                    options: [],
+                  },
+                ],
+              })
+            }
+            className="flex w-full items-center justify-center gap-1 rounded-2xl bg-[#F2F2F7] py-3 text-[11px] font-black uppercase tracking-widest text-[#1D1D1F]"
+          >
+            <Plus className="h-4 w-4" /> Add modifier group
+          </button>
+        </div>
+      )}
+
+      <button
+        disabled={saving}
+        onClick={() => void save()}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#007AFF] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg active:scale-[0.98] disabled:bg-[#D2D2D7]"
+      >
+        <Save className="h-4 w-4" />
+        {saving ? "Saving…" : "Publish Recipe"}
+      </button>
+    </div>
+  );
+}
