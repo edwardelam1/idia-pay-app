@@ -77,11 +77,17 @@ const ADJUST_REASONS = [
 // ============================================================================
 // PLANCK LOGGING
 // ============================================================================
-function PicoLog(
-  action: string,
-  phase: "BEGIN" | "INFO" | "ERROR" | "END",
-  payload?: unknown,
-) {
+type PicoPhase =
+  | "BEGIN"
+  | "STEP"
+  | "SUCCESS"
+  | "ERROR_BEGIN"
+  | "ERROR_DETAIL"
+  | "ERROR_END"
+  | "END"
+  | "INFO"
+  | "ERROR";
+function PicoLog(action: string, phase: PicoPhase, payload?: unknown) {
   const ts = (
     typeof performance !== "undefined" ? performance.now() : Date.now()
   ).toFixed(4);
@@ -156,11 +162,36 @@ const DEFAULT_ORDER = [
   "DASHBOARD",
   "INTAKE_FACTORY",
   "RECEIVE_PO",
+  "RESTOCK_MANIFEST",
   "PHYSICAL_COUNT",
   "AUDIT_VARIANCE",
   "ADJUST_STOCK",
+  "RECIPE_ENGINE",
 ] as const;
 type CardId = (typeof DEFAULT_ORDER)[number];
+
+// Splice positions for state migration (insert AFTER this CardId)
+const SPLICE_AFTER: Record<string, CardId> = {
+  RESTOCK_MANIFEST: "RECEIVE_PO",
+  RECIPE_ENGINE: "ADJUST_STOCK",
+};
+
+function migratePersistedOrder(parsed: unknown): CardId[] | null {
+  if (!Array.isArray(parsed)) return null;
+  const known = parsed.filter((c): c is CardId =>
+    (DEFAULT_ORDER as readonly string[]).includes(c as string),
+  );
+  if (known.length === 0) return null;
+  const result = [...known];
+  for (const card of DEFAULT_ORDER) {
+    if (result.includes(card)) continue;
+    const anchor = SPLICE_AFTER[card];
+    const anchorIdx = anchor ? result.indexOf(anchor) : -1;
+    if (anchorIdx >= 0) result.splice(anchorIdx + 1, 0, card);
+    else result.push(card);
+  }
+  return result;
+}
 
 export default function CommissaryRestockFactory({
   businessId,
@@ -173,13 +204,10 @@ export default function CommissaryRestockFactory({
     try {
       const raw = localStorage.getItem(orderKey);
       if (raw) {
-        const parsed = JSON.parse(raw) as CardId[];
-        if (
-          Array.isArray(parsed) &&
-          parsed.length === DEFAULT_ORDER.length &&
-          DEFAULT_ORDER.every((c) => parsed.includes(c))
-        ) {
-          return parsed;
+        const migrated = migratePersistedOrder(JSON.parse(raw));
+        if (migrated && migrated.length === DEFAULT_ORDER.length) {
+          PicoLog("OrderHydrate", "STEP", { migrated });
+          return migrated;
         }
       }
     } catch (e) {
