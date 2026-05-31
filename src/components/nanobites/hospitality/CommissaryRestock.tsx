@@ -626,6 +626,20 @@ function DashboardView({
       icon: <Edit3 className="h-6 w-6 text-white" />,
       color: "bg-red-500",
     },
+    {
+      id: "RESTOCK_MANIFEST",
+      label: "Restock Manifest (ODM)",
+      path: "Inventory / Live Demand",
+      icon: <Truck className="h-6 w-6 text-white" />,
+      color: "bg-cyan-600",
+    },
+    {
+      id: "RECIPE_ENGINE",
+      label: "Recipe Engine",
+      path: "Menu / Recipes & Modifiers",
+      icon: <Layers className="h-6 w-6 text-white" />,
+      color: "bg-fuchsia-600",
+    },
   ];
 
   return (
