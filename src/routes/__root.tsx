@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { injectResizeObserverShield, logPlanck } from "@/lib/error-capture";
 import { LiquidOSErrorBoundary } from "@/lib/error-boundary";
 import { TenancyProvider } from "@/providers/TenancyProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 
 if (typeof window !== "undefined") {
@@ -127,6 +128,7 @@ function RootComponent() {
           <Outlet />
         </TenancyProvider>
       </LiquidOSErrorBoundary>
+      <Toaster richColors position="top-center" closeButton />
     </QueryClientProvider>
   );
 }
