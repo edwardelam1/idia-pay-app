@@ -82,14 +82,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "IDIA Pay · LiquidOS" },
+      { name: "description", content: "IDIA Pay LiquidOS — a hydrating shell for sovereign, dual-rail commerce. Enter a Hub provisioning code to hydrate your industry workspace." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "IDIA Pay · LiquidOS" },
+      { property: "og:description", content: "IDIA Pay LiquidOS — a hydrating shell for sovereign, dual-rail commerce. Enter a Hub provisioning code to hydrate your industry workspace." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "IDIA Pay · LiquidOS" },
+      { name: "twitter:description", content: "IDIA Pay LiquidOS — a hydrating shell for sovereign, dual-rail commerce. Enter a Hub provisioning code to hydrate your industry workspace." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d414e96c-6c87-48e7-ab30-597f7fec924f/id-preview-bf378127--fb99083f-5f91-4c2e-a99d-263c3baeed06.lovable.app-1783450463757.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d414e96c-6c87-48e7-ab30-597f7fec924f/id-preview-bf378127--fb99083f-5f91-4c2e-a99d-263c3baeed06.lovable.app-1783450463757.png" },
     ],
     links: [
       {
