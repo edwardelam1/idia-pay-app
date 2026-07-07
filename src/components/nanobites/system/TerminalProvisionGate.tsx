@@ -88,105 +88,54 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       logPlanck(
         "PROCESS",
         "PROVISION_LOOKUP",
-        `[STEP] [${LOG_ID}] Querying authoritative ledger.`,
+        `[STEP] [${LOG_ID}] Invoking hydrate-terminal edge function for secure RLS bypass.`,
       );
 
-      let targetBusiness: { id: string; name: string } | null = null;
-      const db = supabase as unknown as {
-        from: (t: string) => {
-          select: (c: string) => {
-            contains: (
-              col: string,
-              val: unknown,
-            ) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> };
-            eq: (
-              col: string,
-              val: unknown,
-            ) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> };
-          };
-        };
-      };
+      const { data, error } = await supabase.functions.invoke("hydrate-terminal", {
+        body: { pairing_code: sanitizedCode },
+      });
 
-      // ATTEMPT A: device_provisioning_blueprints (source of truth for active Hub schemas)
-      logPlanck(
-        "PROCESS",
-        "PROVISION_LOOKUP",
-        `[STEP] [${LOG_ID}] Checking device_provisioning_blueprints.`,
-      );
-      const { data: blueprintRaw } = await db
-        .from("device_provisioning_blueprints")
-        .select("business_id, status")
-        .eq("code", sanitizedCode)
-        .maybeSingle();
-      const blueprintData = blueprintRaw as
-        | { business_id: string; status: string }
-        | null;
-
-      if (blueprintData) {
-        if (blueprintData.status !== "active") {
-          logPlanck(
-            "STALL",
-            "PROVISION_FAILED",
-            `[ERROR_BEGIN] [${LOG_ID}] Schema is inactive.`,
-          );
-          toast.error("This provisioning code is deactivated. Check IDIA Hub.");
-          setIsProcessing(false);
-          return;
-        }
-        const { data: busRaw } = await db
-          .from("businesses")
-          .select("id, name")
-          .eq("id", blueprintData.business_id)
-          .maybeSingle();
-        if (busRaw) targetBusiness = busRaw as { id: string; name: string };
-      }
-
-      // ATTEMPT B: multi-issue codes column (legacy fallback)
-      if (!targetBusiness) {
-        logPlanck(
-          "PROCESS",
-          "PROVISION_LOOKUP",
-          `[STEP] [${LOG_ID}] Checking businesses.provisioning_codes array.`,
-        );
-        try {
-          const { data: arrayData } = await db
-            .from("businesses")
-            .select("id, name")
-            .contains("provisioning_codes", [sanitizedCode])
-            .maybeSingle();
-          if (arrayData) targetBusiness = arrayData as { id: string; name: string };
-        } catch (arrErr) {
-          logPlanck(
-            "STALL",
-            "PROVISION_LOOKUP",
-            `[ERROR_DETAIL] [${LOG_ID}] Array column unavailable; falling back.`,
-            arrErr,
-          );
-        }
-      }
-
-      // ATTEMPT C: legacy single-string column (account-creation fallback)
-      if (!targetBusiness) {
-        logPlanck(
-          "PROCESS",
-          "PROVISION_LOOKUP",
-          `[STEP] [${LOG_ID}] Checking businesses.provisioning_code string.`,
-        );
-        const { data: singleData } = await db
-          .from("businesses")
-          .select("id, name")
-          .eq("provisioning_code", sanitizedCode)
-          .maybeSingle();
-        if (singleData) targetBusiness = singleData as { id: string; name: string };
-      }
-
-      if (!targetBusiness) {
+      if (error) {
         logPlanck(
           "STALL",
           "PROVISION_FAILED",
-          `[ERROR_BEGIN] [${LOG_ID}] No business found for code.`,
+          `[ERROR_BEGIN] [${LOG_ID}] Edge function invocation failed. [ERROR_DETAIL] ${error.message} [ERROR_END]`,
+        );
+        toast.error("System Error: Could not verify provisioning code.");
+        setIsProcessing(false);
+        return;
+      }
+
+      const envelope = data as
+        | { success?: boolean; payload?: Record<string, unknown> }
+        | null;
+
+      if (!envelope || !envelope.success || !envelope.payload) {
+        logPlanck(
+          "STALL",
+          "PROVISION_FAILED",
+          `[ERROR_BEGIN] [${LOG_ID}] Edge function rejected code or payload was empty. [ERROR_DETAIL] Invalid payload received from Hub. [ERROR_END]`,
         );
         toast.error("Provisioning code not recognized. Verify with your Org Admin.");
+        setIsProcessing(false);
+        return;
+      }
+
+      const payload = envelope.payload;
+      const targetBusiness = {
+        id: (payload.businessId ?? payload.business_id) as string | undefined,
+        name: (payload.clientOrganization ??
+          payload.business_name ??
+          "Authorized Terminal") as string,
+      };
+
+      if (!targetBusiness.id) {
+        logPlanck(
+          "STALL",
+          "PROVISION_MALFORMED",
+          `[ERROR_BEGIN] [${LOG_ID}] Manifest corrupted. Missing Business ID. [ERROR_DETAIL] Payload returned successfully but lacked required business identifiers. [ERROR_END]`,
+        );
+        toast.error("Manifest corrupted. Missing Business ID.");
         setIsProcessing(false);
         return;
       }
@@ -207,11 +156,11 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       const msg = err instanceof Error ? err.message : String(err);
       logPlanck(
         "STALL",
-        "DEVICE_PROVISIONING",
-        `[ERROR_BEGIN] [${LOG_ID}] Database lookup failed. [ERROR_DETAIL] ${msg}`,
+        "PROVISION_EXCEPTION",
+        `[ERROR_BEGIN] [${LOG_ID}] Unhandled exception during provision. [ERROR_DETAIL] ${msg} [ERROR_END]`,
         err,
       );
-      toast.error("System Error: Could not verify provisioning code.");
+      toast.error("System Error: Unexpected failure during provisioning.");
       setIsProcessing(false);
     }
   };
