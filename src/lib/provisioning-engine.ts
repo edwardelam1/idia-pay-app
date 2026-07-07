@@ -94,9 +94,24 @@ export class ProvisioningEngine {
       }
 
       console.info(
-        `[STEP] [${LOG_ID}] Payload validated. Caching to local storage.`,
+        `[STEP] [${LOG_ID}] Payload validated. Normalizing before cache.`,
       );
-      const blueprint = envelope.payload as unknown as PayAppBlueprint;
+
+      let payloadObj: unknown = envelope.payload;
+      if (typeof payloadObj === "string") {
+        try {
+          payloadObj = JSON.parse(payloadObj);
+          console.info(
+            `[STEP] [${LOG_ID}] Parsed stringified payload before caching.`,
+          );
+        } catch {
+          console.warn(
+            `[STEP] [${LOG_ID}] Payload arrived as string but failed JSON.parse; caching raw.`,
+          );
+        }
+      }
+
+      const blueprint = payloadObj as unknown as PayAppBlueprint;
       if (typeof window !== "undefined") {
         window.localStorage.setItem(this.STORAGE_KEY, JSON.stringify(blueprint));
       }
