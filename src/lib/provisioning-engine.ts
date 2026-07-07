@@ -59,59 +59,44 @@ export class ProvisioningEngine {
 
     try {
       console.info(
-        `[STEP] [${LOG_ID}] Querying device_provisioning_blueprints for payload.`,
+        `[STEP] [${LOG_ID}] Invoking 'hydrate-terminal' edge function for secure RLS bypass.`,
       );
-      const db = supabase as unknown as {
-        from: (t: string) => {
-          select: (c: string) => {
-            eq: (col: string, val: unknown) => {
-              maybeSingle: () => Promise<{
-                data: BlueprintRow;
-                error: { message: string } | null;
-              }>;
-            };
-          };
-        };
-      };
-      const { data, error } = await db
-        .from("device_provisioning_blueprints")
-        .select("payload, status")
-        .eq("code", provisioningCode)
-        .maybeSingle();
+
+      const { data, error } = await supabase.functions.invoke("hydrate-terminal", {
+        body: { pairing_code: provisioningCode },
+      });
 
       if (error) {
-        console.error(`[ERROR_BEGIN] [${LOG_ID}] Database query rejected.`);
-        console.error(`[ERROR_DETAIL] [${LOG_ID}] ${error.message}`);
-        throw new Error(error.message);
-      }
-
-      if (!data) {
-        console.error(`[ERROR_BEGIN] [${LOG_ID}] No blueprint row found.`);
         console.error(
-          `[ERROR_DETAIL] [${LOG_ID}] Code ${provisioningCode} has no manifest. Verify Hub config.`,
+          `[ERROR_BEGIN] [${LOG_ID}] Edge function invocation failed. [ERROR_DETAIL] ${error.message} [ERROR_END]`,
         );
-        throw new Error(
-          `No manifest found for "${provisioningCode}". Please deploy a blueprint from IDIA Hub.`,
-        );
+        throw new Error(`Edge function invocation failed: ${error.message}`);
       }
 
-      if (data.status !== "active") {
-        console.error(`[ERROR_BEGIN] [${LOG_ID}] Blueprint is inactive.`);
-        throw new Error(
-          `The manifest for "${provisioningCode}" is deactivated in IDIA Hub.`,
-        );
-      }
+      const envelope = data as
+        | { success?: boolean; payload?: Record<string, unknown> }
+        | null;
 
-      const payloadObj = (data.payload ?? null) as Record<string, unknown> | null;
-      if (!payloadObj || Object.keys(payloadObj).length === 0) {
-        console.error(`[ERROR_BEGIN] [${LOG_ID}] Payload nullity detected.`);
+      if (!envelope || !envelope.success) {
+        console.error(
+          `[ERROR_BEGIN] [${LOG_ID}] Provisioning failed at Hub. [ERROR_DETAIL] success flag missing or false. [ERROR_END]`,
+        );
         throw new Error(
           `No manifest found for "${provisioningCode}". Verify Hub config.`,
         );
       }
 
-      console.info(`[STEP] [${LOG_ID}] Payload validated. Caching to local storage.`);
-      const blueprint = payloadObj as unknown as PayAppBlueprint;
+      if (!envelope.payload || Object.keys(envelope.payload).length === 0) {
+        console.error(
+          `[ERROR_BEGIN] [${LOG_ID}] Empty payload returned. [ERROR_DETAIL] Hub returned success but omitted the blueprint payload. [ERROR_END]`,
+        );
+        throw new Error("Manifest corrupted: Empty payload returned.");
+      }
+
+      console.info(
+        `[STEP] [${LOG_ID}] Payload validated. Caching to local storage.`,
+      );
+      const blueprint = envelope.payload as unknown as PayAppBlueprint;
       if (typeof window !== "undefined") {
         window.localStorage.setItem(this.STORAGE_KEY, JSON.stringify(blueprint));
       }
