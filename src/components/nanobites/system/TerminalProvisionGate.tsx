@@ -121,19 +121,89 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
         return;
       }
 
-      const payload = envelope.payload;
+      // 1. Handle stringified JSON defensively
+      let payloadObj: unknown = envelope.payload;
+      if (typeof payloadObj === "string") {
+        try {
+          payloadObj = JSON.parse(payloadObj);
+          logPlanck(
+            "PROCESS",
+            "PROVISION_PARSE",
+            `[STEP] [${LOG_ID}] Successfully parsed stringified payload.`,
+          );
+        } catch {
+          logPlanck(
+            "PROCESS",
+            "PROVISION_PARSE",
+            `[STEP] [${LOG_ID}] Payload is a string but failed to parse as JSON.`,
+          );
+        }
+      }
+
+      // 2. Inspection logging — root keys to Planck + full dump to DevTools
+      const rootKeys =
+        payloadObj && typeof payloadObj === "object"
+          ? Object.keys(payloadObj as Record<string, unknown>).join(", ")
+          : "(non-object)";
+      logPlanck(
+        "PROCESS",
+        "PROVISION_INSPECT",
+        `[STEP] [${LOG_ID}] Inspecting payload structure from Hub. Root keys: ${rootKeys}`,
+      );
+      // eslint-disable-next-line no-console
+      console.dir(payloadObj, { depth: null });
+
+      // 3. Recursive deep-search for identifiers, however deeply nested
+      const deepFind = (obj: unknown, targetKeys: string[]): unknown => {
+        if (!obj || typeof obj !== "object") return undefined;
+        const record = obj as Record<string, unknown>;
+        for (const key of targetKeys) {
+          const val = record[key];
+          if (val !== undefined && val !== null && val !== "") return val;
+        }
+        for (const key of Object.keys(record)) {
+          const found = deepFind(record[key], targetKeys);
+          if (found !== undefined) return found;
+        }
+        return undefined;
+      };
+
+      // 4. Extract with broad key net
+      const extractedId = deepFind(payloadObj, [
+        "businessId",
+        "business_id",
+        "merchantId",
+        "organization_id",
+        "org_id",
+      ]);
+      const extractedName =
+        deepFind(payloadObj, [
+          "clientOrganization",
+          "business_name",
+          "merchantName",
+          "org_name",
+          "name",
+        ]) ?? "Authorized Terminal";
+
+      const idString =
+        typeof extractedId === "string"
+          ? extractedId
+          : extractedId &&
+              typeof extractedId === "object" &&
+              typeof (extractedId as { id?: unknown }).id !== "undefined"
+            ? String((extractedId as { id: unknown }).id)
+            : undefined;
+
       const targetBusiness = {
-        id: (payload.businessId ?? payload.business_id) as string | undefined,
-        name: (payload.clientOrganization ??
-          payload.business_name ??
-          "Authorized Terminal") as string,
+        id: idString,
+        name: String(extractedName),
       };
 
       if (!targetBusiness.id) {
         logPlanck(
           "STALL",
           "PROVISION_MALFORMED",
-          `[ERROR_BEGIN] [${LOG_ID}] Manifest corrupted. Missing Business ID. [ERROR_DETAIL] Payload returned successfully but lacked required business identifiers. [ERROR_END]`,
+          `[ERROR_BEGIN] [${LOG_ID}] Manifest corrupted. Missing Business ID. [ERROR_DETAIL] Deep search failed. Root keys: ${rootKeys} [ERROR_END]`,
         );
         toast.error("Manifest corrupted. Missing Business ID.");
         setIsProcessing(false);
