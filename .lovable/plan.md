@@ -1,37 +1,36 @@
-# Defensive Payload Parsing for Hub Manifest
+## Temporary Unblocker: Fall Back to `provisioningCode` as Business ID
 
-The `hydrate-terminal` edge function returns 200 OK, but the payload may arrive stringified or with the business ID nested inside a config block. Add defensive parsing and a recursive deep-search so Pay binds regardless of manifest shape.
+While Clyde patches the Hub's `hydrate-terminal` edge function to include a proper business identifier in the manifest payload, add a short-term fallback in the Pay terminal so it can boot into its OS using the `provisioningCode` itself as the bound business ID.
 
-## Changes
+### Change
 
-### 1. `src/components/nanobites/system/TerminalProvisionGate.tsx`
+**`src/components/nanobites/system/TerminalProvisionGate.tsx`** — In the extraction block (step 4), extend the `extractedId` assignment with a fallback to `payloadObj.provisioningCode` when the deep-search returns nothing:
 
-Replace the payload-mapping block (from `const payload = envelope.payload;` through the `!targetBusiness.id` guard) with:
+```ts
+const payloadRecord = (payloadObj && typeof payloadObj === "object")
+  ? (payloadObj as Record<string, unknown>)
+  : {};
 
-- **Defensive parse:** if `envelope.payload` is a string, `JSON.parse` it inside a try/catch; log `[STEP]` on success or a warning on failure.
-- **Inspection logging:** `logPlanck` a `PROVISION_INSPECT` step listing root keys, plus `console.dir(payloadObj, { depth: null })` so the exact shape lands in DevTools.
-- **`deepFind(obj, targetKeys)` helper** (typed against `unknown` to match file lint style): checks current-level keys first, then recurses into every nested object/array. Returns first non-null / non-empty match.
-- **Broad key net:**
-  - ID: `businessId`, `business_id`, `merchantId`, `organization_id`, `org_id`
-  - Name: `clientOrganization`, `business_name`, `merchantName`, `org_name`, `name` (fallback `"Authorized Terminal"`)
-- **Unwrap wrapped IDs:** if extracted ID is an object with `.id`, use `String(extractedId.id)`; else coerce to string.
-- Keep the `PROVISION_MALFORMED` toast + marker, but include root keys in the error detail so failures are diagnosable from Planck logs alone.
-- Downstream `HardwareStorage.setItem`, `onProvisioned`, success toast, and `PROVISION_SUCCESS` marker unchanged.
+const extractedId =
+  deepFind(payloadObj, [
+    "businessId",
+    "business_id",
+    "merchantId",
+    "organization_id",
+    "org_id",
+  ]) ?? payloadRecord.provisioningCode; // TEMP: unblock until Hub adds business_id
+```
 
-### 2. `src/lib/provisioning-engine.ts`
+- Keep the existing `deepFind` name lookup and `"Authorized Terminal"` fallback unchanged.
+- Keep `idString` unwrap logic, `PROVISION_MALFORMED` guard, `HardwareStorage.setItem` writes, `onProvisioned` call, and all `logPlanck` markers unchanged.
+- Add a `PROVISION_FALLBACK` `logPlanck` marker when the fallback path is taken so it is visible in Planck logs that the terminal booted on a provisioning code, not a real business ID.
 
-Mirror the defensive parse before caching so `loadCached()` never returns a double-stringified blob:
+### Out of scope
 
-- After the `envelope.success` / non-empty payload guards, coerce `envelope.payload`: if string, `JSON.parse` inside try/catch and log a `[STEP]` marker; otherwise use as-is.
-- Cache the parsed object under `idia_blueprint_v1` (unchanged key).
-- `SEED_BLUEPRINT` fallback, `loadCached()`, `wipeDevice()` untouched.
+- `src/lib/provisioning-engine.ts` (no fallback needed there — it caches the full blueprint object which already contains `provisioningCode`)
+- Hub-side `hydrate-terminal` edge function, manifest vault schema
+- Downstream consumers of `idia_provisioned_business_id` (they will receive the provisioning code string until the Hub is patched)
 
-## Out of scope
-
-- Hub-side manifest shape or `hydrate-terminal` edge function (lives in `idia-hub` repo)
-- Toaster, AuthGate, RLS, migrations, `registry.ts`, `TenancyProvider`
-
-## Files touched
+### Files touched
 
 - edit: `src/components/nanobites/system/TerminalProvisionGate.tsx`
-- edit: `src/lib/provisioning-engine.ts`

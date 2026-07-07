@@ -169,13 +169,27 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       };
 
       // 4. Extract with broad key net
-      const extractedId = deepFind(payloadObj, [
+      const payloadRecord =
+        payloadObj && typeof payloadObj === "object"
+          ? (payloadObj as Record<string, unknown>)
+          : {};
+
+      const deepExtractedId = deepFind(payloadObj, [
         "businessId",
         "business_id",
         "merchantId",
         "organization_id",
         "org_id",
       ]);
+      // TEMP: unblock terminal boot until Hub manifest includes business_id
+      const extractedId = deepExtractedId ?? payloadRecord.provisioningCode;
+      if (deepExtractedId === undefined && payloadRecord.provisioningCode) {
+        logPlanck(
+          "PROCESS",
+          "PROVISION_FALLBACK",
+          `[STEP] [${LOG_ID}] No business ID in manifest; falling back to provisioningCode as bound ID.`,
+        );
+      }
       const extractedName =
         deepFind(payloadObj, [
           "clientOrganization",
