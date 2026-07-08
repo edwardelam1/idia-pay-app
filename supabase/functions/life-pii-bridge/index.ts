@@ -24,12 +24,17 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const PUBLISHABLE_KEY =
+    const SUPABASE_KEY =
+      Deno.env.get("IDIA_SECRET_KEY") ??
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
       Deno.env.get("IDIA_PUBLISHABLE_KEY") ??
       Deno.env.get("SUPABASE_ANON_KEY") ??
       Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
 
-    if (!SUPABASE_URL || !PUBLISHABLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      console.error("[life-pii-bridge] Missing SUPABASE_URL or key");
+      return json({ error: "Server misconfigured" }, 500);
+    }
       console.error("[life-pii-bridge] Missing SUPABASE_URL or publishable key");
       return json({ error: "Server misconfigured" }, 500);
     }
