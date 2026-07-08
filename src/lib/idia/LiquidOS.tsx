@@ -91,23 +91,8 @@ export function LiquidOS() {
     };
   }, [provisioningCode]);
 
-  // Ctrl/Cmd+Tab (and Ctrl+`) → open Flip 3D switcher while operational
-  useEffect(() => {
-    if (phase.kind !== "operational") return;
-    const screens = uniqueScreens(phase.subModule);
-    if (screens.length < 2) return;
-    function onKey(e: KeyboardEvent) {
-      const trigger =
-        ((e.ctrlKey || e.metaKey) && e.key === "Tab") ||
-        (e.ctrlKey && e.key === "`");
-      if (trigger) {
-        e.preventDefault();
-        setFlipOpen((v) => !v);
-      }
-    }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [phase]);
+
+
 
   // Mid-screen horizontal swipe → open Flip 3D switcher (mobile gesture)
   const handleTouchStart = (e: React.TouchEvent) => {
