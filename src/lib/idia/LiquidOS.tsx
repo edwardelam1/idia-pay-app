@@ -54,7 +54,7 @@ export function LiquidOS() {
   const [activeScreen, setActiveScreen] = useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number; t: number } | null>(null);
   const [flipOpen, setFlipOpen] = useState(false);
 
   useEffect(() => {
@@ -91,31 +91,44 @@ export function LiquidOS() {
     };
   }, [provisioningCode]);
 
-  // Ctrl/Cmd+Tab (and Ctrl+`) → open Flip 3D switcher while operational
-  useEffect(() => {
-    if (phase.kind !== "operational") return;
-    const screens = uniqueScreens(phase.subModule);
-    if (screens.length < 2) return;
-    function onKey(e: KeyboardEvent) {
-      const trigger =
-        ((e.ctrlKey || e.metaKey) && e.key === "Tab") ||
-        (e.ctrlKey && e.key === "`");
-      if (trigger) {
-        e.preventDefault();
-        setFlipOpen((v) => !v);
-      }
-    }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [phase]);
 
-  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
+
+
+  // Mid-screen horizontal swipe → open Flip 3D switcher (mobile gesture)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    setTouchStart({ x: t.clientX, y: t.clientY, t: Date.now() });
+  };
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
-    const diffX = touchStartX - e.changedTouches[0].clientX;
-    if (diffX > 50) setIsSidebarOpen(false);
-    else if (diffX < -50 && touchStartX < 40) setIsSidebarOpen(true);
-    setTouchStartX(null);
+    if (!touchStart) return;
+    const end = e.changedTouches[0];
+    const dx = end.clientX - touchStart.x;
+    const dy = end.clientY - touchStart.y;
+    const dt = Date.now() - touchStart.t;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+    const midBandTop = vh * 0.3;
+    const midBandBottom = vh * 0.7;
+    const inMidBand = touchStart.y >= midBandTop && touchStart.y <= midBandBottom;
+    const horizontal = Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
+    const quick = dt < 500;
+
+    // Priority 1: middle-band horizontal swipe opens Flip 3D
+    if (
+      phase.kind === "operational" &&
+      uniqueScreens(phase.subModule).length >= 2 &&
+      inMidBand &&
+      horizontal &&
+      quick
+    ) {
+      setFlipOpen(true);
+      setTouchStart(null);
+      return;
+    }
+
+    // Priority 2: sidebar edge-swipe fallback
+    if (dx < -50) setIsSidebarOpen(false);
+    else if (dx > 50 && touchStart.x < 40) setIsSidebarOpen(true);
+    setTouchStart(null);
   };
 
   function chooseSubModule(sm: SubModule, carton: VerticalCarton) {
@@ -337,17 +350,6 @@ export function LiquidOS() {
             <h1 className="text-[32px] font-semibold tracking-tight mt-1">{current}</h1>
           </div>
           <div className="flex items-center gap-2">
-            {screens.length > 1 && (
-              <button
-                onClick={() => setFlipOpen(true)}
-                title="Flip 3D (Ctrl+Tab)"
-                className="px-4 h-11 flex items-center gap-2 text-[12px] font-semibold text-foreground hover:text-[#007AFF] shadow-sm transition-colors"
-                style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}
-              >
-                <span className="text-[15px] leading-none">⌘</span>
-                Flip 3D
-              </button>
-            )}
             <div
               className="px-4 h-11 flex items-center gap-2 text-[12px] text-muted-foreground shadow-sm"
               style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}

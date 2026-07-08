@@ -23,36 +23,29 @@ export default function Flip3DSwitcher({
   const initial = Math.max(0, screens.indexOf(activeScreen));
   const [focus, setFocus] = useState(initial);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const touchRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
   useEffect(() => {
     stageRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onCommit(screens[focus] ?? activeScreen);
-        return;
-      }
-      if (e.key === "Tab" || e.key === "ArrowRight" || e.key === "ArrowDown") {
-        e.preventDefault();
-        setFocus((f) => (f + (e.shiftKey && e.key === "Tab" ? -1 : 1) + screens.length) % screens.length);
-        return;
-      }
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-        e.preventDefault();
-        setFocus((f) => (f - 1 + screens.length) % screens.length);
-      }
+  function onStageTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+  function onStageTouchEnd(e: React.TouchEvent) {
+    const start = touchRef.current;
+    touchRef.current = null;
+    if (!start) return;
+    const end = e.changedTouches[0];
+    const dx = end.clientX - start.x;
+    const dy = end.clientY - start.y;
+    const dt = Date.now() - start.t;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3 && dt < 600) {
+      if (dx < 0) setFocus((f) => (f + 1) % screens.length);
+      else setFocus((f) => (f - 1 + screens.length) % screens.length);
     }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [focus, screens, activeScreen, onCommit, onClose]);
+  }
 
   // Card sizing — proportional to viewport
   const CARD_W = Math.min(920, typeof window !== "undefined" ? window.innerWidth * 0.7 : 900);
@@ -74,7 +67,22 @@ export default function Flip3DSwitcher({
         className="flip3d-stage relative outline-none"
         style={{ width: "100%", height: "100%" }}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={onStageTouchStart}
+        onTouchEnd={onStageTouchEnd}
       >
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-5 right-5 z-10 h-11 w-11 flex items-center justify-center text-white text-[18px] font-semibold"
+          style={{
+            borderRadius: 999,
+            background: "rgba(20,22,30,0.6)",
+            backdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          ✕
+        </button>
         <div className="flip3d-track">
           {screens.map((s, i) => {
             const d = i - focus;
@@ -148,7 +156,7 @@ export default function Flip3DSwitcher({
             {focus + 1} / {screens.length}
           </span>
           <span className="opacity-40">·</span>
-          <span className="opacity-70">Tab cycle · Enter open · Esc cancel</span>
+          <span className="opacity-70">Swipe to browse · Tap to open</span>
         </div>
       </div>
     </div>

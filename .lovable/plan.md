@@ -1,49 +1,46 @@
-# Flip 3D Switcher for LiquidOS
+## Goal
+Replace the desktop keyboard trigger (Ctrl/Cmd+Tab) and the header "Flip 3D" pill button with a **mobile horizontal swipe gesture** across the middle of the screen to open/drive the Flip 3D switcher. IDIA Pay is mobile-only, so keyboard shortcuts and pointer buttons that assume a physical keyboard have no place.
 
-Add a Vista/7-style Flip 3D carousel that cycles through the current Sub-Module's **Screens** in the operational phase of `LiquidOS`. Live DOM (not snapshots) so nano-bite content keeps updating while flipped.
+## Changes
 
-## Scope
-- Only the operational phase in `src/lib/idia/LiquidOS.tsx`. Loading, error, and selection phases are untouched.
-- Flip navigates between `screens` (already computed via `uniqueScreens(subModule)`). Sub-module and module-library navigation stay in the sidebar.
+### 1. `src/lib/idia/LiquidOS.tsx`
+- Remove the `useEffect` that listens for `Ctrl/Cmd+Tab` and `Ctrl+\``.
+- Remove the header "⌘ Flip 3D" pill button (keep only the "Synapse Live" indicator).
+- Extend the existing touch handler (currently used for sidebar open/close) so that a **horizontal swipe starting in the vertical middle band of the viewport** (roughly 30%–70% of screen height) opens the Flip 3D switcher when `phase.kind === "operational"` and there are ≥2 screens.
+  - Track `touchStartX`, `touchStartY`, and `touchStartT` on `touchstart`.
+  - On `touchend`: compute `dx`, `dy`, `dt`.
+    - If `startY` is inside the middle band AND `|dx| > 60px` AND `|dx| > |dy| * 1.5` AND `dt < 500ms` → open `Flip3DSwitcher` and preselect direction (`dx > 0` = next screen preview, `dx < 0` = previous).
+    - Otherwise fall through to existing edge-swipe sidebar logic (which only fires when `startX < 40` or a right-to-left swipe closes the sidebar).
+- Priority: middle-swipe gesture is evaluated first; sidebar edge-swipe only runs if the middle-swipe condition is not met.
 
-## Trigger
-- Keyboard: `Ctrl/Cmd + Tab` opens the carousel; `Tab` / `Shift+Tab` or `←/→` cycle; `Enter` or click commits; `Esc` cancels.
-- UI: small "Flip 3D" button in the operational header next to the "Synapse Live" pill (keyboard hint shown in tooltip).
+### 2. `src/components/liquidos/Flip3DSwitcher.tsx`
+- Drive carousel navigation with **swipe gestures on the stage** instead of arrow keys / Tab:
+  - Swipe left → next screen.
+  - Swipe right → previous screen.
+  - Tap the center (active) card → commit and close.
+  - Tap a side card → make it active (rotate carousel toward it).
+  - Tap the dark scrim → close without changing screen.
+- Remove all `keydown` listeners (Tab, Arrows, Enter, Esc). Replace the Esc affordance with a small floating "Close" chip (thumb-reachable, top-right).
+- Replace the HUD hint text like "Tab / ← →" with "Swipe · Tap to open".
 
-## Rendering approach — CSS3, per user choice
-- New component `src/components/liquidos/Flip3DSwitcher.tsx`.
-- Full-screen overlay: dark scrim (`bg-black/55`) + `backdrop-blur-xl` behind the stage, matching Aero dimming/desaturation.
-- Stage element sets `perspective: 1600px` and `perspective-origin: 50% 45%`; inner track uses `transform-style: preserve-3d`.
-- Each screen rendered into a card `div` sized to viewport with the actual screen content (grid of nano-bites) inside a scaled wrapper so it reads at a glance but stays live/interactive on the focused card.
-- Per-card transform (index `i` relative to focused): `translateX(i * 90px) translateZ(i * -180px) rotateY(-55deg)`; focused card interpolates to `rotateY(0)` centered.
-- 300ms transitions on `transform` and `opacity` with `cubic-bezier(0.22, 1, 0.36, 1)` (easing that mimics DWM). Background cards get slight opacity falloff and pointer-events off; only the focused card is clickable.
-- Optional reflection: mirrored copy below via `scaleY(-1)` + mask-image linear-gradient for alpha fade (Compiz-style, subtle).
-
-## Layout Algorithm (matches the spec)
-For screens array `S`, focused index `f`, and card index `i`, with `d = i - f`:
-- `rotateY`: `d === 0 ? 0deg : -55deg`
-- `translateX`: `d * 90px` (negative drift keeps left edges visible for identification)
-- `translateY`: `d === 0 ? 0 : 8px`
-- `translateZ`: `-Math.abs(d) * 180px`
-- `opacity`: `d === 0 ? 1 : max(0.55, 1 - abs(d) * 0.12)`
-- `zIndex`: `screens.length - abs(d)`
-
-## Files
-- **New**: `src/components/liquidos/Flip3DSwitcher.tsx` — self-contained overlay, receives `screens`, `activeScreen`, `renderScreen(screen)`, `onCommit(screen)`, `onClose()`.
-- **New**: `src/components/liquidos/flip3d.css` — keyframes for enter/exit (scale from 0.96 + fade, 220ms), scoped card transitions, reflection mask.
-- **Edit**: `src/lib/idia/LiquidOS.tsx`
-  - Extract the per-screen content grid (currently inlined in the operational `<main>`) into a small `ScreenBoard` local component so both the normal view and the switcher can render it.
-  - Add `flipOpen` state, global `keydown` listener (Ctrl/Cmd+Tab to open; Tab/Shift+Tab/Arrows to cycle a temporary `flipIndex`; Enter to commit → `setActiveScreen`; Esc to close).
-  - Add the "Flip 3D" header button.
-  - Render `<Flip3DSwitcher />` when `flipOpen`.
-- **No other files touched.** No new deps. No route changes. No backend changes.
+### 3. No changes needed to `src/components/liquidos/flip3d.css` — the perspective, transforms, reflections, and reduced-motion rules all stay.
 
 ## Technical Details
-- `preventDefault()` on Ctrl/Cmd+Tab so the browser tab switcher does not steal focus (works reliably in the preview iframe; documented caveat: real browsers block Ctrl+Tab override outside iframes — the `Ctrl+\`` fallback shortcut is bound as backup).
-- Uses only Tailwind classes + inline `style={{ transform: ... }}`, consistent with existing LiquidOS styling. No changes to design tokens.
-- Reduced motion: if `prefers-reduced-motion: reduce`, the carousel opens with no rotation (2D fan) and 120ms fade.
-- Cleanup: window listeners removed on unmount; overlay traps focus while open and restores focus to the header button on close.
+- Gesture math (in `LiquidOS`):
+  ```
+  const midBandTop = window.innerHeight * 0.30;
+  const midBandBottom = window.innerHeight * 0.70;
+  const horizontal = Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
+  const quick = dt < 500;
+  const inMidBand = startY >= midBandTop && startY <= midBandBottom;
+  ```
+- Inside `Flip3DSwitcher`, use `onTouchStart` / `onTouchEnd` on the stage container; commit navigation by calling the same `setIndex` logic that the removed keyboard handlers used.
+- Preserve reduced-motion support already in `flip3d.css`.
+- No route, backend, or Supabase changes.
 
 ## Verification
-- Manual: open preview, enter an operational screen, press Ctrl+Tab → carousel appears with live nano-bites, cycle with Tab, commit with Enter, screen swaps. Esc cancels without changing `activeScreen`.
-- Console clean; no `[ERROR]` logs; no route changes so build stays green.
+- Manually swipe horizontally across the middle of the preview (mobile viewport) while inside an operational sub-module → Flip 3D opens.
+- Swipe left/right inside the switcher → cards cycle.
+- Tap active card → commits and closes; tap scrim → closes without change.
+- Edge-swipe from left still opens the sidebar; right-swipe still closes it.
+- No console errors, no references to keyboard shortcuts remain in the UI.
