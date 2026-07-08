@@ -44,12 +44,12 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    const supabase = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
-      global: { headers: { Authorization: authHeader } },
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !userData?.user) {
       console.error("[life-pii-bridge] getUser failed", userErr);
       return json({ error: "Unauthorized" }, 401);
