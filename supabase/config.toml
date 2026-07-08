@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.fiat-payment-processing]
 verify_jwt = true
+
+[functions.life-pii-bridge]
+verify_jwt = true
