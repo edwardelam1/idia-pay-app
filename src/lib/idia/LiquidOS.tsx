@@ -109,13 +109,41 @@ export function LiquidOS() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [phase]);
 
-  const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
+  // Mid-screen horizontal swipe → open Flip 3D switcher (mobile gesture)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    setTouchStart({ x: t.clientX, y: t.clientY, t: Date.now() });
+  };
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
-    const diffX = touchStartX - e.changedTouches[0].clientX;
-    if (diffX > 50) setIsSidebarOpen(false);
-    else if (diffX < -50 && touchStartX < 40) setIsSidebarOpen(true);
-    setTouchStartX(null);
+    if (!touchStart) return;
+    const end = e.changedTouches[0];
+    const dx = end.clientX - touchStart.x;
+    const dy = end.clientY - touchStart.y;
+    const dt = Date.now() - touchStart.t;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+    const midBandTop = vh * 0.3;
+    const midBandBottom = vh * 0.7;
+    const inMidBand = touchStart.y >= midBandTop && touchStart.y <= midBandBottom;
+    const horizontal = Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
+    const quick = dt < 500;
+
+    // Priority 1: middle-band horizontal swipe opens Flip 3D
+    if (
+      phase.kind === "operational" &&
+      uniqueScreens(phase.subModule).length >= 2 &&
+      inMidBand &&
+      horizontal &&
+      quick
+    ) {
+      setFlipOpen(true);
+      setTouchStart(null);
+      return;
+    }
+
+    // Priority 2: sidebar edge-swipe fallback
+    if (dx < -50) setIsSidebarOpen(false);
+    else if (dx > 50 && touchStart.x < 40) setIsSidebarOpen(true);
+    setTouchStart(null);
   };
 
   function chooseSubModule(sm: SubModule, carton: VerticalCarton) {
