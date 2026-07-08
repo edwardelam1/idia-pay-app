@@ -350,17 +350,6 @@ export function LiquidOS() {
             <h1 className="text-[32px] font-semibold tracking-tight mt-1">{current}</h1>
           </div>
           <div className="flex items-center gap-2">
-            {screens.length > 1 && (
-              <button
-                onClick={() => setFlipOpen(true)}
-                title="Flip 3D (Ctrl+Tab)"
-                className="px-4 h-11 flex items-center gap-2 text-[12px] font-semibold text-foreground hover:text-[#007AFF] shadow-sm transition-colors"
-                style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}
-              >
-                <span className="text-[15px] leading-none">⌘</span>
-                Flip 3D
-              </button>
-            )}
             <div
               className="px-4 h-11 flex items-center gap-2 text-[12px] text-muted-foreground shadow-sm"
               style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}
