@@ -1,34 +1,21 @@
-## Context
+## Root cause
 
-Supabase disabled the legacy JWT-format `anon` and `service_role` keys for the connected project (`zxyngqciipcvveigrzqt`) and reissued them in the new `sb_publishable_...` / `sb_secret_...` format. The current `.env` still ships the old JWT anon key, and the server runtime secrets (`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) still reference the disabled values, so both the browser client and every server function / edge function are now hitting Supabase with rejected keys.
+The "Legacy API keys are disabled" 401 on `/auth/v1/otp` comes from the **browser Supabase client**. Its API key is baked in at build time from `VITE_SUPABASE_PUBLISHABLE_KEY`, and `.env` still holds the old JWT anon key that Supabase disabled on 2026-06-03. Every login attempt sends that dead key as `apikey` + `Authorization`, and Supabase Auth rejects it before any edge function runs.
 
-## Plan
+A secondary bug: `supabase/functions/life-pii-bridge/index.ts` has an orphaned `console.error(...) / return / }` block (lines 38–40) left over from an earlier edit. That's a syntax error, which is why the function also 500s.
 
-1. **Collect the new keys from the user** (they are not something I can read from Supabase). Ask for:
-   - New publishable key (`sb_publishable_...`) — public, safe to commit.
-   - New service role / secret key (`sb_secret_...`) — must go through the secure secret form.
+## Fix
 
-2. **Update the browser publishable key** in `.env`:
-   - Replace `VITE_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_PUBLISHABLE_KEY` with the new `sb_publishable_...` value.
-   - Leave `SUPABASE_URL` / `VITE_SUPABASE_URL` / project id unchanged.
-   - `src/integrations/supabase/client.ts`, `client.server.ts`, and `auth-middleware.ts` already read from these env vars — no code edits needed.
+1. **`.env`** — replace the two publishable-key lines with the new key you already provided:
+   - `SUPABASE_PUBLISHABLE_KEY="sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B"`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B"`
+   - Leave URL and project id untouched. This is what permanently fixes the login legacy-key error — Vite will rebuild the browser bundle with the live key.
 
-3. **Update runtime secrets** used by server functions and edge functions:
-   - `SUPABASE_PUBLISHABLE_KEY` → new publishable key (via `set_secret`, non-sensitive).
-   - `SUPABASE_SERVICE_ROLE_KEY` → new secret key (via `add_secret` secure form so the value never passes through chat).
-   - This also refreshes the key that `hydrate-terminal`, `relay-usdc-transfer`, `flexa-payment-processing`, and `fiat-payment-processing` edge functions rely on.
+2. **`supabase/functions/life-pii-bridge/index.ts`** — delete the dead lines 38–40 (the duplicate `console.error` / `return` / `}` after the valid `if` block) so the function parses and stops 500-ing.
 
-4. **Verify** after keys are in place:
-   - Reload the preview and confirm the Supabase client boots without `Invalid API key` errors in the console.
-   - Trigger `TerminalProvisionGate` hydration path and confirm `hydrate-terminal` still returns 200.
-   - If any edge function still 401s, redeploy it so it picks up the new secret.
+3. **Verify** — reload preview, attempt login: `/auth/v1/otp` should return 200; `hydrate-terminal` should stay 200; `life-pii-bridge` should return PII (or 401 if unauth) but not 500.
 
-## Out of scope
+## Not doing
 
-- `LOVABLE_API_KEY` (separate rotation tool, not affected by Supabase key rotation).
-- Any change to RLS, table grants, or the provisioning fallback logic added earlier.
-- Rewriting the auth middleware or client files — they already source keys from env.
-
-## What I need from you
-
-Please paste the new **publishable key** (`sb_publishable_...`) in chat, and be ready to paste the new **secret key** (`sb_secret_...`) into the secure form I'll open for `SUPABASE_SERVICE_ROLE_KEY`.
+- No changes to server env vars (`IDIA_PUBLISHABLE_KEY` / `IDIA_SECRET_KEY` are already correctly wired in `client.server.ts`, `auth-middleware.ts`, and the edge function fallback chain).
+- No RLS, schema, or provider-config changes.

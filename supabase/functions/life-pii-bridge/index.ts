@@ -35,9 +35,6 @@ Deno.serve(async (req) => {
       console.error("[life-pii-bridge] Missing SUPABASE_URL or key");
       return json({ error: "Server misconfigured" }, 500);
     }
-      console.error("[life-pii-bridge] Missing SUPABASE_URL or publishable key");
-      return json({ error: "Server misconfigured" }, 500);
-    }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
