@@ -19,6 +19,7 @@ import {
   ActiveBusinessContext,
   ActiveBusinessProvider,
 } from "@/lib/idia/ActiveBusinessContext";
+import Flip3DSwitcher from "@/components/liquidos/Flip3DSwitcher";
 
 /**
  * THE LIQUID ATOM REGISTRY
@@ -54,6 +55,7 @@ export function LiquidOS() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [flipOpen, setFlipOpen] = useState(false);
 
   useEffect(() => {
     if (!provisioningCode) return;
@@ -88,6 +90,24 @@ export function LiquidOS() {
       cancelled = true;
     };
   }, [provisioningCode]);
+
+  // Ctrl/Cmd+Tab (and Ctrl+`) → open Flip 3D switcher while operational
+  useEffect(() => {
+    if (phase.kind !== "operational") return;
+    const screens = uniqueScreens(phase.subModule);
+    if (screens.length < 2) return;
+    function onKey(e: KeyboardEvent) {
+      const trigger =
+        ((e.ctrlKey || e.metaKey) && e.key === "Tab") ||
+        (e.ctrlKey && e.key === "`");
+      if (trigger) {
+        e.preventDefault();
+        setFlipOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [phase]);
 
   const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.touches[0].clientX);
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -316,12 +336,25 @@ export function LiquidOS() {
             </p>
             <h1 className="text-[32px] font-semibold tracking-tight mt-1">{current}</h1>
           </div>
-          <div
-            className="px-4 h-11 flex items-center gap-2 text-[12px] text-muted-foreground shadow-sm"
-            style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}
-          >
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Synapse Live
+          <div className="flex items-center gap-2">
+            {screens.length > 1 && (
+              <button
+                onClick={() => setFlipOpen(true)}
+                title="Flip 3D (Ctrl+Tab)"
+                className="px-4 h-11 flex items-center gap-2 text-[12px] font-semibold text-foreground hover:text-[#007AFF] shadow-sm transition-colors"
+                style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}
+              >
+                <span className="text-[15px] leading-none">⌘</span>
+                Flip 3D
+              </button>
+            )}
+            <div
+              className="px-4 h-11 flex items-center gap-2 text-[12px] text-muted-foreground shadow-sm"
+              style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Synapse Live
+            </div>
           </div>
         </header>
 
@@ -336,6 +369,35 @@ export function LiquidOS() {
           ))}
         </div>
       </main>
+
+      {flipOpen && (
+        <Flip3DSwitcher
+          screens={screens}
+          activeScreen={current}
+          onClose={() => setFlipOpen(false)}
+          onCommit={(s) => {
+            setActiveScreen(s);
+            setFlipOpen(false);
+          }}
+          renderScreen={(s) => {
+            const screenBites = phase.subModule.nanoBites
+              .filter((nb) => nb.screen === s)
+              .sort((a, b) => a.order - b.order);
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
+                {screenBites.map((nb) => (
+                  <NanoBiteRenderer
+                    key={nb.id}
+                    spec={nb}
+                    carton={phase.carton}
+                    subModule={phase.subModule}
+                  />
+                ))}
+              </div>
+            );
+          }}
+        />
+      )}
     </div>
   );
 }
