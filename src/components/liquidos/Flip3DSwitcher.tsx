@@ -67,7 +67,22 @@ export default function Flip3DSwitcher({
         className="flip3d-stage relative outline-none"
         style={{ width: "100%", height: "100%" }}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={onStageTouchStart}
+        onTouchEnd={onStageTouchEnd}
       >
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-5 right-5 z-10 h-11 w-11 flex items-center justify-center text-white text-[18px] font-semibold"
+          style={{
+            borderRadius: 999,
+            background: "rgba(20,22,30,0.6)",
+            backdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          ✕
+        </button>
         <div className="flip3d-track">
           {screens.map((s, i) => {
             const d = i - focus;
