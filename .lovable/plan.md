@@ -1,36 +1,34 @@
-## Temporary Unblocker: Fall Back to `provisioningCode` as Business ID
+## Context
 
-While Clyde patches the Hub's `hydrate-terminal` edge function to include a proper business identifier in the manifest payload, add a short-term fallback in the Pay terminal so it can boot into its OS using the `provisioningCode` itself as the bound business ID.
+Supabase disabled the legacy JWT-format `anon` and `service_role` keys for the connected project (`zxyngqciipcvveigrzqt`) and reissued them in the new `sb_publishable_...` / `sb_secret_...` format. The current `.env` still ships the old JWT anon key, and the server runtime secrets (`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) still reference the disabled values, so both the browser client and every server function / edge function are now hitting Supabase with rejected keys.
 
-### Change
+## Plan
 
-**`src/components/nanobites/system/TerminalProvisionGate.tsx`** — In the extraction block (step 4), extend the `extractedId` assignment with a fallback to `payloadObj.provisioningCode` when the deep-search returns nothing:
+1. **Collect the new keys from the user** (they are not something I can read from Supabase). Ask for:
+   - New publishable key (`sb_publishable_...`) — public, safe to commit.
+   - New service role / secret key (`sb_secret_...`) — must go through the secure secret form.
 
-```ts
-const payloadRecord = (payloadObj && typeof payloadObj === "object")
-  ? (payloadObj as Record<string, unknown>)
-  : {};
+2. **Update the browser publishable key** in `.env`:
+   - Replace `VITE_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_PUBLISHABLE_KEY` with the new `sb_publishable_...` value.
+   - Leave `SUPABASE_URL` / `VITE_SUPABASE_URL` / project id unchanged.
+   - `src/integrations/supabase/client.ts`, `client.server.ts`, and `auth-middleware.ts` already read from these env vars — no code edits needed.
 
-const extractedId =
-  deepFind(payloadObj, [
-    "businessId",
-    "business_id",
-    "merchantId",
-    "organization_id",
-    "org_id",
-  ]) ?? payloadRecord.provisioningCode; // TEMP: unblock until Hub adds business_id
-```
+3. **Update runtime secrets** used by server functions and edge functions:
+   - `SUPABASE_PUBLISHABLE_KEY` → new publishable key (via `set_secret`, non-sensitive).
+   - `SUPABASE_SERVICE_ROLE_KEY` → new secret key (via `add_secret` secure form so the value never passes through chat).
+   - This also refreshes the key that `hydrate-terminal`, `relay-usdc-transfer`, `flexa-payment-processing`, and `fiat-payment-processing` edge functions rely on.
 
-- Keep the existing `deepFind` name lookup and `"Authorized Terminal"` fallback unchanged.
-- Keep `idString` unwrap logic, `PROVISION_MALFORMED` guard, `HardwareStorage.setItem` writes, `onProvisioned` call, and all `logPlanck` markers unchanged.
-- Add a `PROVISION_FALLBACK` `logPlanck` marker when the fallback path is taken so it is visible in Planck logs that the terminal booted on a provisioning code, not a real business ID.
+4. **Verify** after keys are in place:
+   - Reload the preview and confirm the Supabase client boots without `Invalid API key` errors in the console.
+   - Trigger `TerminalProvisionGate` hydration path and confirm `hydrate-terminal` still returns 200.
+   - If any edge function still 401s, redeploy it so it picks up the new secret.
 
-### Out of scope
+## Out of scope
 
-- `src/lib/provisioning-engine.ts` (no fallback needed there — it caches the full blueprint object which already contains `provisioningCode`)
-- Hub-side `hydrate-terminal` edge function, manifest vault schema
-- Downstream consumers of `idia_provisioned_business_id` (they will receive the provisioning code string until the Hub is patched)
+- `LOVABLE_API_KEY` (separate rotation tool, not affected by Supabase key rotation).
+- Any change to RLS, table grants, or the provisioning fallback logic added earlier.
+- Rewriting the auth middleware or client files — they already source keys from env.
 
-### Files touched
+## What I need from you
 
-- edit: `src/components/nanobites/system/TerminalProvisionGate.tsx`
+Please paste the new **publishable key** (`sb_publishable_...`) in chat, and be ready to paste the new **secret key** (`sb_secret_...`) into the secure form I'll open for `SUPABASE_SERVICE_ROLE_KEY`.
