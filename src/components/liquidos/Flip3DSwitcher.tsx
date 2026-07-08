@@ -156,7 +156,7 @@ export default function Flip3DSwitcher({
             {focus + 1} / {screens.length}
           </span>
           <span className="opacity-40">·</span>
-          <span className="opacity-70">Tab cycle · Enter open · Esc cancel</span>
+          <span className="opacity-70">Swipe to browse · Tap to open</span>
         </div>
       </div>
     </div>
