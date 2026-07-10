@@ -2,6 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
+function isLegacySupabaseJwtKey(key: string) {
+  return key.trim().startsWith('eyJ');
+}
+
 function createSupabaseClient() {
   // Use import.meta.env for client-side (Vite build-time replacement)
   // Fall back to process.env for SSR (server-side rendering)
@@ -14,6 +18,12 @@ function createSupabaseClient() {
       ...(!SUPABASE_PUBLISHABLE_KEY ? ['SUPABASE_PUBLISHABLE_KEY'] : []),
     ];
     const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
+    console.error(`[Supabase] ${message}`);
+    throw new Error(message);
+  }
+
+  if (isLegacySupabaseJwtKey(SUPABASE_PUBLISHABLE_KEY)) {
+    const message = 'Supabase publishable key is a disabled legacy JWT. Use the sb_publishable_... key from Supabase API Keys.';
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
   }

@@ -19,6 +19,10 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function isLegacySupabaseJwtKey(key: string) {
+  return key.trim().startsWith("eyJ");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -26,13 +30,15 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_KEY =
       Deno.env.get("IDIA_SECRET_KEY") ??
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-      Deno.env.get("IDIA_PUBLISHABLE_KEY") ??
-      Deno.env.get("SUPABASE_ANON_KEY") ??
-      Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+      Deno.env.get("IDIA_PUBLISHABLE_KEY");
 
     if (!SUPABASE_URL || !SUPABASE_KEY) {
       console.error("[life-pii-bridge] Missing SUPABASE_URL or key");
+      return json({ error: "Server misconfigured" }, 500);
+    }
+
+    if (isLegacySupabaseJwtKey(SUPABASE_KEY)) {
+      console.error("[life-pii-bridge] Supabase key is a disabled legacy JWT");
       return json({ error: "Server misconfigured" }, 500);
     }
 

@@ -1,30 +1,83 @@
-## Restore public read on `profiles`
+## Finding from history
 
-You've confirmed `profiles` is a PII-free public user directory. The blockchain balance regression is because the previous migration dropped the `USING (true)` SELECT policy — cross-user lookups (wallet address, display name, trust score) now return 0 rows and the balance widget falls back to `$0.00`.
+We already fixed this on **July 8**:
 
-### Migration
+- You provided the new publishable key: `sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B`
+- `.env` was updated to use that value for:
+  - `SUPABASE_PUBLISHABLE_KEY`
+  - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- Server-side code was repointed to:
+  - `IDIA_PUBLISHABLE_KEY`
+  - `IDIA_SECRET_KEY`
 
-One `supabase--migration` call:
+The current project state has **regressed**: `.env` is back to the old JWT-format anon key for both publishable env vars. That is why Supabase Auth returns `Legacy API keys are disabled` on every login attempt.
 
-```sql
-CREATE POLICY "Enable read access for all users"
-  ON public.profiles
-  FOR SELECT
-  TO public
-  USING (true);
+## Permanent fix plan
+
+### 1. Restore the known-good publishable key
+
+Update `.env` so both browser/server publishable entries use the July 8 key again:
+
+```env
+SUPABASE_PUBLISHABLE_KEY="sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B"
+VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B"
 ```
 
-The existing owner-scoped policies (`Users can view their own profile`, insert, update) stay in place — this just re-adds the public read layer on top.
+Keep `SUPABASE_URL` / `VITE_SUPABASE_URL` unchanged.
 
-### Security finding
+### 2. Add a startup guard against legacy JWT keys
 
-After the migration, `ignore` the `profiles_public_read` finding via `security--manage_security_finding` with the explanation that `profiles` is intentionally a PII-free public user directory (wallet address, display name, trust score only). Also update `@security-memory` so the scanner stops re-flagging it.
+Add a small client-side validation in `src/integrations/supabase/client.ts` before `createClient(...)`:
 
-### Not touched
+- If the configured publishable key starts with `eyJ`, fail fast with a clear error like:
+  - `Supabase publishable key is a disabled legacy JWT. Use sb_publishable_...`
+- This prevents the app from silently using a reverted legacy key again.
 
-The three proposal-table fixes (`dao_proposals`, `governance_proposals`, `user_proposals` — RLS enabled, public policies dropped) stay as-is. Those were unrelated to the balance regression.
+### 3. Add the same guard to authenticated server middleware
 
-### After approval
-1. Run the migration.
-2. Ignore + memo the profiles finding.
-3. Confirm balances reappear.
+Add the same validation in `src/integrations/supabase/auth-middleware.ts` for the server publishable key path.
+
+This protects `requireSupabaseAuth` server functions if runtime env is ever pointed back at a JWT-format key.
+
+### 4. Add the same guard to privileged server client
+
+Add a clear validation in `src/integrations/supabase/client.server.ts`:
+
+- Prefer `IDIA_SECRET_KEY` as it does today.
+- If the value starts with `eyJ`, fail fast with a message that the secret must be the new `sb_secret_...` format.
+
+### 5. Tighten `life-pii-bridge` fallback order
+
+Update `supabase/functions/life-pii-bridge/index.ts` so it does **not** fall back to disabled legacy variables after `IDIA_*`:
+
+Current fallback still includes:
+
+```ts
+SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_ANON_KEY
+SUPABASE_PUBLISHABLE_KEY
+```
+
+Plan:
+
+- Use `IDIA_SECRET_KEY` first.
+- Use `IDIA_PUBLISHABLE_KEY` only if needed.
+- Reject any key that starts with `eyJ` with a clear server misconfiguration error.
+- Do not silently try disabled legacy keys.
+
+### 6. Verify the actual failure path
+
+After implementation:
+
+- Reload preview.
+- Attempt OTP/login.
+- Confirm `/auth/v1/otp` no longer sends the old JWT in `apikey` / `authorization` headers.
+- Confirm no console error says `Legacy API keys are disabled`.
+
+## Not changing
+
+- No RLS changes.
+- No profile policy changes.
+- No blockchain logic changes.
+- No payment function changes unless they reference disabled Supabase keys.
+- No secret values will be exposed or committed beyond the public `sb_publishable_...` key.

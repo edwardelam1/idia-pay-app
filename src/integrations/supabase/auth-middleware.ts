@@ -4,6 +4,9 @@ import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
 
+function isLegacySupabaseJwtKey(key: string) {
+  return key.trim().startsWith('eyJ');
+}
 
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
@@ -18,6 +21,12 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
         ...(!SUPABASE_PUBLISHABLE_KEY ? ['IDIA_PUBLISHABLE_KEY'] : []),
       ];
       const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
+      console.error(`[Supabase] ${message}`);
+      throw new Response(message, { status: 500 });
+    }
+
+    if (isLegacySupabaseJwtKey(SUPABASE_PUBLISHABLE_KEY)) {
+      const message = 'Supabase publishable key is a disabled legacy JWT. Use the sb_publishable_... key from Supabase API Keys.';
       console.error(`[Supabase] ${message}`);
       throw new Response(message, { status: 500 });
     }
