@@ -59,18 +59,26 @@ export function QuantityStepper({
   max?: number;
   step?: number;
 }) {
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
   const clamp = (n: number) => Math.max(min, Math.min(max, n));
   const startRepeat = (dir: 1 | -1) => {
-    const tick = () => onChange(clamp(value + dir * step));
-    tick();
+    const bump = () => {
+      const next = clamp(valueRef.current + dir * step);
+      valueRef.current = next;
+      onChange(next);
+    };
+    bump();
     let delay = 400;
     const run = () => {
       timer.current = setTimeout(() => {
-        onChange((v) => clamp((v as unknown as number) + dir * step) as never);
+        bump();
         delay = Math.max(60, delay - 60);
         run();
-      }, delay) as unknown as ReturnType<typeof setInterval>;
+      }, delay);
     };
     run();
   };
