@@ -136,38 +136,19 @@ function MobilePosSaleInner({ onFireToKds, onProcessPayment }: MobilePosSaleProp
 // DEVICE FRAME — Static mobile envelope. Background never stretches/scrolls.
 // ============================================================================
 function DeviceFrame({
-  frame,
   children,
 }: {
   frame: ReturnType<typeof useHardwareFrame>;
   children: React.ReactNode;
 }) {
-  if (frame.isPhysicalMobile) {
-    // Real phone: full-bleed.
-    return (
-      <div
-        className="fixed inset-0 overflow-hidden bg-background"
-        style={{ width: "100vw", height: "100dvh" }}
-      >
-        {children}
-      </div>
-    );
-  }
-  // Desktop / tablet host: static centered phone-shaped frame.
+  // Always full-bleed within the host container. No nested phone bezel.
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center overflow-hidden bg-muted"
-      style={{ touchAction: "none" }}
-    >
-      <div
-        className="relative overflow-hidden rounded-[44px] border-[10px] border-foreground/90 bg-background shadow-2xl"
-        style={{ width: frame.width, height: frame.height }}
-      >
-        {children}
-      </div>
+    <div className="absolute inset-0 overflow-hidden bg-background">
+      {children}
     </div>
   );
 }
+
 
 // ============================================================================
 // POS SURFACE
