@@ -92,8 +92,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "IDIA Pay · LiquidOS" },
       { name: "twitter:description", content: "IDIA Pay LiquidOS — a hydrating shell for sovereign, dual-rail commerce. Enter a Hub provisioning code to hydrate your industry workspace." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d414e96c-6c87-48e7-ab30-597f7fec924f/id-preview-bf378127--fb99083f-5f91-4c2e-a99d-263c3baeed06.lovable.app-1783450463757.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d414e96c-6c87-48e7-ab30-597f7fec924f/id-preview-bf378127--fb99083f-5f91-4c2e-a99d-263c3baeed06.lovable.app-1783450463757.png" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/MWen9JhzLcbIug0B63nPGgVP2Qg2/social-images/social-1783694673956-IDIA_Pay_Logo_Refined_x2.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/MWen9JhzLcbIug0B63nPGgVP2Qg2/social-images/social-1783694673956-IDIA_Pay_Logo_Refined_x2.webp" },
     ],
     links: [
       {

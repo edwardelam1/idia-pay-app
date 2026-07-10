@@ -14,7 +14,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "Sovereign, dual-rail (USD + USDC) commerce OS that hydrates from The Hub.",
+          "IDIA Pay LiquidOS — a hydrating shell for sovereign, dual-rail commerce. Enter a Hub provisioning code to hydrate your industry workspace.",
       },
     ],
   }),
