@@ -296,15 +296,15 @@ export default function DailyPrepList({ businessId = "default" }: { businessId?:
         }
       `}</style>
 
-      {/* HEADER: Action Button Top Right */}
-      <div className="pt-10 pb-4 px-6 bg-white border-b flex justify-between items-center z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 bg-[#1D1D1F] text-white rounded-xl flex items-center justify-center shadow-md">
-            <ClipboardList size={22} />
+      {/* HEADER */}
+      <div className="pt-4 pb-3 px-4 bg-white border-b flex justify-between items-center z-10 shadow-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-9 w-9 shrink-0 bg-[#1D1D1F] text-white rounded-lg flex items-center justify-center shadow-md">
+            <ClipboardList size={18} />
           </div>
-          <div className="flex flex-col">
-            <h1 className="text-xl font-black tracking-tighter text-[#1D1D1F]">DPL</h1>
-            <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-[0.12em]">Daily Prep List</span>
+          <div className="flex flex-col min-w-0">
+            <h1 className="text-base font-black tracking-tighter text-[#1D1D1F] leading-tight">DPL</h1>
+            <span className="text-[9px] font-bold text-[#86868B] uppercase tracking-[0.12em] leading-tight">Daily Prep List</span>
           </div>
         </div>
         <Button
@@ -313,14 +313,14 @@ export default function DailyPrepList({ businessId = "default" }: { businessId?:
             triggerHaptic();
             setStep("entry");
           }}
-          className="h-11 min-w-[44px] rounded-full bg-[#1D1D1F] text-white font-bold px-6 shadow-md"
+          className="h-9 rounded-full bg-[#1D1D1F] text-white font-bold px-4 text-sm shadow-md"
         >
-          <Plus className="mr-2 h-4 w-4" /> Add Item
+          <Plus className="mr-1 h-4 w-4" /> Add
         </Button>
       </div>
 
       <ScrollArea className="flex-1 w-full">
-        <div className="p-4 pb-[200px] space-y-3 relative" style={{ transformStyle: "preserve-3d" }}>
+        <div className="p-3 pb-24 space-y-2 relative" style={{ transformStyle: "preserve-3d" }}>
           {logs.map((item, index) => (
             <div
               key={item.location}
@@ -328,7 +328,7 @@ export default function DailyPrepList({ businessId = "default" }: { businessId?:
               style={
                 isFlip3D
                   ? {
-                      transform: `rotateX(190deg) translateY(${index * 96}px)`, // 190 deg tilt, spread 1 inch (96px)
+                      transform: `rotateX(190deg) translateY(${index * 96}px)`,
                       transformOrigin: "top center",
                       position: index > 0 ? "absolute" : "relative",
                       top: index > 0 ? 0 : "auto",
@@ -342,56 +342,51 @@ export default function DailyPrepList({ businessId = "default" }: { businessId?:
               onPointerCancel={clearHoldTimer}
               onPointerLeave={clearHoldTimer}
             >
-              <Card className="border-none shadow-sm rounded-[24px] overflow-hidden bg-white">
-                <CardContent className="p-6 flex justify-between items-center min-h-[88px]">
-                  <div className="flex flex-col pointer-events-none">
-                    <span className="text-[11px] font-black text-[#007AFF] uppercase tracking-wider">
+              <Card className="border-none shadow-sm rounded-2xl overflow-hidden bg-white">
+                <CardContent className="p-3 flex justify-between items-center gap-3">
+                  <div className="flex flex-col pointer-events-none min-w-0">
+                    <span className="text-[10px] font-black text-[#007AFF] uppercase tracking-wider leading-tight">
                       {item.station}
                     </span>
-                    <h3 className="text-2xl font-black text-[#1D1D1F] mt-1">{item.item_name}</h3>
-                    <div className="flex items-center gap-2 mt-2 text-[#86868B] font-bold text-sm">
-                      <Calculator size={14} /> {item.on_hand} / {item.par_level} {item.unit}
+                    <h3 className="text-base font-black text-[#1D1D1F] leading-tight truncate">{item.item_name}</h3>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[#86868B] font-bold text-xs">
+                      <Calculator size={11} /> {item.on_hand} / {item.par_level} {item.unit}
                     </div>
                   </div>
                   <div
-                    className={`flex flex-col items-end pointer-events-none ${item.need > 0 ? "text-[#FF3B30]" : "text-[#34C759]"}`}
+                    className={`flex items-baseline gap-1.5 shrink-0 pointer-events-none ${item.need > 0 ? "text-[#FF3B30]" : "text-[#34C759]"}`}
                   >
-                    <span className="text-[10px] font-black uppercase tracking-widest">Need</span>
-                    <span className="text-4xl font-black leading-none mt-1">{item.need}</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest">Need</span>
+                    <span className="text-2xl font-black leading-none">{item.need}</span>
+                    <button
+                      className="ml-2 text-[10px] font-black uppercase text-[#1D1D1F] active:opacity-60 pointer-events-auto"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        logPlanck("TRIGGER", "CALIBRATE_ACTION", `Calibration requested for ${item.location}`);
+                        triggerHaptic("light");
+                      }}
+                    >
+                      Calibrate
+                    </button>
                   </div>
                 </CardContent>
-                {/* THE LAW: Minimum 44px Interaction Target */}
-                <div className="flex h-[56px] border-t border-[#F2F2F7]">
-                  <button
-                    className="flex-1 text-[13px] font-black uppercase text-[#1D1D1F] active:bg-[#F5F5F7] min-h-[44px]"
-                    onClick={() => {
-                      logPlanck("TRIGGER", "CALIBRATE_ACTION", `Calibration requested for ${item.location}`);
-                      triggerHaptic("light");
-                    }}
-                  >
-                    Calibrate Par
-                  </button>
-                </div>
               </Card>
             </div>
           ))}
         </div>
       </ScrollArea>
 
-      {/* FOOTER: Bottom-Weighted Action (Thumb Zone) */}
-      <div className="fixed bottom-0 left-0 w-full p-6 bg-white/90 backdrop-blur-xl border-t border-[#F2F2F7] z-20 flex flex-col gap-3">
-        <div className="flex items-center gap-2 px-2 text-[#86868B]">
-          <Info size={14} />
-          <span className="text-[11px] font-bold uppercase tracking-tight">Egress: Commissary Restock Ledger</span>
-        </div>
+      {/* FOOTER */}
+      <div className="fixed bottom-0 left-0 w-full p-3 bg-white/90 backdrop-blur-xl border-t border-[#F2F2F7] z-20">
         <Button
           disabled={isProcessing || logs.length === 0}
-          className="w-full h-[72px] min-h-[44px] text-xl font-black rounded-[24px] bg-[#007AFF] text-white shadow-2xl active:scale-[0.98] transition-transform"
+          className="w-full h-12 text-sm font-black rounded-2xl bg-[#007AFF] text-white shadow-lg active:scale-[0.98] transition-transform"
           onClick={syncToCommissary}
         >
-          {isProcessing ? "Transmitting..." : "VAULT DEMAND SIGNAL"}
+          {isProcessing ? "Transmitting..." : "VAULT DEMAND SIGNAL — Commissary Restock"}
         </Button>
       </div>
+
 
       {/* ============================================================================
           FORM ENTRY: THE LAW (Labels Above, Single Column, Contextual Keyboards)
