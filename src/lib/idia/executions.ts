@@ -74,7 +74,7 @@ export function recordExecution(rec: RecordInput): ExecutionRecord {
         nano_bite_id: full.nanoBiteId,
         screen: full.screen,
         action: full.action,
-        payload: full.payload ?? {},
+        payload: (full.payload ?? {}) as never,
         user_id: userRes?.user?.id ?? null,
         created_at: full.createdAt,
       });
