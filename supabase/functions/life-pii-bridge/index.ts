@@ -68,8 +68,7 @@ Deno.serve(async (req) => {
     const full_name =
       (meta.full_name as string | undefined) ??
       (meta.display_name as string | undefined) ??
-      [first_name, last_name].filter(Boolean).join(" ") ||
-      null;
+      ([first_name, last_name].filter(Boolean).join(" ") || null);
     const display_name =
       (meta.display_name as string | undefined) ?? full_name ?? null;
     const email = userData.user.email ?? (meta.email as string | undefined) ?? null;
