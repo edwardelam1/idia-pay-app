@@ -27,12 +27,16 @@ const GRID = [
 
 export default function QuickFireItemAdd() {
   const cartonCode = useCartonCode();
-  const { ready, location, clockedIn } = useShiftLock();
+  const { ready, location, clockedIn, drifted, driftMeters } = useShiftLock();
   const [cart, setCart] = useState<{ id: string; label: string; price: number }[]>([]);
 
   const tap = (item: (typeof GRID)[number]) => {
     if (!ready) {
-      toast.error("Lock Location + Clock In required to take orders.");
+      toast.error(
+        drifted
+          ? "Location drift detected — re-lock GPS before taking orders."
+          : "Lock Location + Clock In required to take orders.",
+      );
       return;
     }
     setCart((c) => [...c, item]);
