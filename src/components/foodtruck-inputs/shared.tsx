@@ -84,7 +84,7 @@ export function QuantityStepper({
   };
   const stopRepeat = () => {
     if (timer.current) {
-      clearTimeout(timer.current as unknown as number);
+      clearTimeout(timer.current);
       timer.current = null;
     }
   };
