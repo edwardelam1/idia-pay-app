@@ -1,44 +1,30 @@
-## Security fixes: enable RLS + lock down profiles
+## Restore public read on `profiles`
 
-Four error-level findings, all fixed via one migration.
+You've confirmed `profiles` is a PII-free public user directory. The blockchain balance regression is because the previous migration dropped the `USING (true)` SELECT policy — cross-user lookups (wallet address, display name, trust score) now return 0 rows and the balance widget falls back to `$0.00`.
 
-### 1. Enable RLS on the three proposal tables
+### Migration
 
-`dao_proposals`, `governance_proposals`, and `user_proposals` already have policies defined — RLS is just switched off, so the policies aren't enforced. Fix:
-
-```sql
-ALTER TABLE public.dao_proposals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.governance_proposals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_proposals ENABLE ROW LEVEL SECURITY;
-```
-
-### 2. Require authentication on the proposal tables
-
-Existing policies on these tables use `USING (true)` for the `public` role, meaning anon can read. Per your request ("require authentication only"), drop the public-read policies and replace with `TO authenticated` equivalents. Writes stay restricted to their existing rules (service_role for `governance_proposals`, owner for `user_proposals`, etc.).
-
-### 3. Lock down `profiles`
-
-Drop the `Enable read access for all users` policy (`USING (true)`) and replace with owner-only read:
+One `supabase--migration` call:
 
 ```sql
-DROP POLICY "Enable read access for all users" ON public.profiles;
-CREATE POLICY "Users read own profile"
-  ON public.profiles FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id);
+CREATE POLICY "Enable read access for all users"
+  ON public.profiles
+  FOR SELECT
+  TO public
+  USING (true);
 ```
 
-Existing insert/update owner policies stay.
+The existing owner-scoped policies (`Users can view their own profile`, insert, update) stay in place — this just re-adds the public read layer on top.
 
-### 4. Deliverable
+### Security finding
 
-One `supabase--migration` call with all four changes. Everything is SQL-only — no app code changes needed since the app already queries under authenticated sessions.
+After the migration, `ignore` the `profiles_public_read` finding via `security--manage_security_finding` with the explanation that `profiles` is intentionally a PII-free public user directory (wallet address, display name, trust score only). Also update `@security-memory` so the scanner stops re-flagging it.
 
----
+### Not touched
 
-### `dao_proposals` vs `governance_proposals`
+The three proposal-table fixes (`dao_proposals`, `governance_proposals`, `user_proposals` — RLS enabled, public policies dropped) stay as-is. Those were unrelated to the balance regression.
 
-- **`dao_proposals`** — Off-chain committee/DAO-internal proposals inside the app: created by users/committees, discussed via `proposal_comments`, voted on via `dao_votes`, vetoed via `dao_vetoes`. Domain-level governance objects that live entirely in Postgres.
-- **`governance_proposals`** — Mirror of **on-chain** protocol proposals indexed from the blockchain (via `governance_indexer_state` and `governance_ledger`). Writes are restricted to `service_role` because only the indexer should insert/update them; users only read.
-
-Same word "proposal", different layers: `dao_proposals` = app-native committee workflow, `governance_proposals` = read-only reflection of on-chain governance state.
+### After approval
+1. Run the migration.
+2. Ignore + memo the profiles finding.
+3. Confirm balances reappear.
