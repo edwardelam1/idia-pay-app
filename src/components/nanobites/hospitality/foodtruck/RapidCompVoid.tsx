@@ -1,13 +1,14 @@
 /**
  * Pico-Bite 1.4 · hosp.ft.pos.void_comp
  * Rapid Comp/Void — swipe-left on cart item reveals Void/Comp; requires
- * manager PIN + reason code.
+ * manager PIN + biometric + reason code.
  */
 import { useRef, useState } from "react";
 import { recordExecution } from "@/lib/idia/executions";
 import {
   ActionButton,
-  Numpad,
+  ManagerAuth,
+  type ManagerAuthResult,
   PicoCard,
   SUBMODULE_ID,
   useCartonCode,
@@ -34,7 +35,7 @@ export default function RapidCompVoid() {
     null,
   );
   const [reason, setReason] = useState<string>(REASONS[0]);
-  const [pinOpen, setPinOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
 
   const onTouchStart = (id: string, e: React.TouchEvent) => {
     startX.current[id] = e.touches[0].clientX;
@@ -49,10 +50,9 @@ export default function RapidCompVoid() {
 
   const openAction = (row: CartRow, kind: "void" | "comp") => {
     setTarget({ row, kind });
-    setPinOpen(true);
   };
 
-  const confirm = (pin: string) => {
+  const confirm = (auth: ManagerAuthResult) => {
     if (!target) return;
     recordExecution({
       cartonCode,
@@ -65,12 +65,14 @@ export default function RapidCompVoid() {
         label: target.row.label,
         kind: target.kind,
         reason,
-        managerPinLength: pin.length,
+        authMethod: `pin+${auth.method}`,
+        managerPinLength: auth.pinLength,
+        credentialId: auth.credentialId ?? null,
       },
     });
     setItems((cur) => cur.filter((r) => r.id !== target.row.id));
     setTarget(null);
-    setPinOpen(false);
+    setAuthOpen(false);
   };
 
   return (
@@ -114,8 +116,6 @@ export default function RapidCompVoid() {
         )}
       </div>
 
-      {target && !pinOpen && null}
-
       {target && (
         <>
           <p className="text-[12px] font-semibold mt-2">Reason</p>
@@ -136,7 +136,7 @@ export default function RapidCompVoid() {
               className="flex-1"
               onClick={() => {
                 setTarget(null);
-                setPinOpen(false);
+                setAuthOpen(false);
               }}
             >
               Cancel
@@ -144,21 +144,19 @@ export default function RapidCompVoid() {
             <ActionButton
               variant="danger"
               className="flex-1"
-              onClick={() => setPinOpen(true)}
+              onClick={() => setAuthOpen(true)}
             >
-              Enter Manager PIN
+              Authorize {target.kind}
             </ActionButton>
           </div>
         </>
       )}
 
-      <Numpad
-        open={pinOpen}
-        title={`Manager PIN · ${target?.kind.toUpperCase()}`}
-        mode="pin"
-        maxLength={6}
-        onCancel={() => setPinOpen(false)}
-        onSubmit={confirm}
+      <ManagerAuth
+        open={authOpen}
+        title={`Manager · ${target?.kind.toUpperCase() ?? ""}`}
+        onCancel={() => setAuthOpen(false)}
+        onAuthed={confirm}
       />
     </PicoCard>
   );

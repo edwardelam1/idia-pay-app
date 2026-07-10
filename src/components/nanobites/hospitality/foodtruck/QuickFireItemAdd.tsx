@@ -27,12 +27,16 @@ const GRID = [
 
 export default function QuickFireItemAdd() {
   const cartonCode = useCartonCode();
-  const { ready, location, clockedIn } = useShiftLock();
+  const { ready, location, clockedIn, drifted, driftMeters } = useShiftLock();
   const [cart, setCart] = useState<{ id: string; label: string; price: number }[]>([]);
 
   const tap = (item: (typeof GRID)[number]) => {
     if (!ready) {
-      toast.error("Lock Location + Clock In required to take orders.");
+      toast.error(
+        drifted
+          ? "Location drift detected — re-lock GPS before taking orders."
+          : "Lock Location + Clock In required to take orders.",
+      );
       return;
     }
     setCart((c) => [...c, item]);
@@ -52,9 +56,9 @@ export default function QuickFireItemAdd() {
     <PicoCard title="Quick-Fire Item Add" subtitle="Tap a tile to add to cart">
       {!ready && (
         <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[12px] text-amber-800">
-          Locked · {location ? "location set" : "no location"} ·{" "}
-          {clockedIn ? "clocked in" : "not clocked in"}. Complete Fleet check-in
-          + Time Punch first.
+          {drifted
+            ? `Location drift · ${Math.round(driftMeters)}m from lock. Re-lock GPS in Fleet → GPS Check-In.`
+            : `Locked · ${location ? "location set" : "no location"} · ${clockedIn ? "clocked in" : "not clocked in"}. Complete Fleet check-in + Time Punch first.`}
         </div>
       )}
       <div className="grid grid-cols-3 gap-3">

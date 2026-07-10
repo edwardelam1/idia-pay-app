@@ -1,6 +1,7 @@
 /**
  * Pico-Bite 4.1 · hosp.ft.fleet.loc_lock
- * GPS Check-In — event name text input + OS geolocation poll + Lock Location.
+ * GPS Check-In — event name input + geolocation poll + Lock Location.
+ * Runs the hybrid 250m drift monitor while the shift is locked.
  */
 import { useState } from "react";
 import { toast } from "sonner";
@@ -8,10 +9,12 @@ import { z } from "zod";
 import { recordExecution } from "@/lib/idia/executions";
 import {
   ActionButton,
+  DRIFT_THRESHOLD_M,
   PicoCard,
   SUBMODULE_ID,
   setShiftLocation,
   useCartonCode,
+  useLocationDriftMonitor,
   useShiftLock,
 } from "@/components/foodtruck-inputs/shared";
 
@@ -24,7 +27,8 @@ const schema = z.object({
 
 export default function GpsCheckIn() {
   const cartonCode = useCartonCode();
-  const { location } = useShiftLock();
+  const { location, drifted, driftMeters } = useShiftLock();
+  useLocationDriftMonitor();
   const [eventName, setEventName] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [polling, setPolling] = useState(false);
@@ -60,14 +64,19 @@ export default function GpsCheckIn() {
       toast.error("Poll GPS first.");
       return;
     }
-    setShiftLocation(eventName);
+    setShiftLocation(eventName, coords);
     recordExecution({
       cartonCode,
       subModuleId: SUBMODULE_ID,
       nanoBiteId: NANO_BITE_ID,
       screen: SCREEN,
       action: NANO_BITE_ID,
-      payload: { eventName, coords },
+      payload: {
+        eventName,
+        coords,
+        driftThresholdM: DRIFT_THRESHOLD_M,
+        cadence: "hybrid",
+      },
     });
     toast.success(`Locked at ${eventName}`);
   };
@@ -78,7 +87,7 @@ export default function GpsCheckIn() {
   };
 
   return (
-    <PicoCard title="GPS Check-In" subtitle="Anchor the shift to a physical event location">
+    <PicoCard title="GPS Check-In" subtitle="Hybrid lock · re-prompt on 250m drift">
       <input
         className="h-11 rounded-xl border px-3 text-[14px] bg-white"
         placeholder="Event / Location name"
@@ -90,14 +99,21 @@ export default function GpsCheckIn() {
         <ActionButton variant="ghost" onClick={poll} disabled={polling}>
           {polling ? "Polling…" : coords ? "Re-poll GPS" : "Poll GPS"}
         </ActionButton>
-        <ActionButton onClick={lock}>Lock Location</ActionButton>
+        <ActionButton onClick={lock}>
+          {drifted ? "Re-Lock Location" : "Lock Location"}
+        </ActionButton>
       </div>
       {coords && (
         <p className="text-[11px] text-muted-foreground text-center tabular-nums">
           {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
         </p>
       )}
-      {location && (
+      {drifted && (
+        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[12px] text-amber-900">
+          Drift detected · {Math.round(driftMeters)}m from lock. Re-poll GPS and Re-Lock to resume sales.
+        </div>
+      )}
+      {location && !drifted && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200">
           <span className="text-[12px] text-emerald-900">Locked · {location}</span>
           <button onClick={unlock} className="text-[11px] text-emerald-800 underline">
