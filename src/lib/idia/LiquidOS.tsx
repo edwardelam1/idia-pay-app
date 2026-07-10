@@ -362,18 +362,20 @@ export function LiquidOS() {
         </div>
       </aside>
 
-      <main className="flex-1 w-full px-2 py-6 sm:px-10 sm:py-10 overflow-y-auto h-screen custom-scrollbar">
-        <header className="flex items-center justify-between mb-8 pl-4">
-          <div>
-            <p className="text-[12px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+      <main className="flex-1 w-full h-screen flex flex-col px-3 py-3 sm:px-6 sm:py-4 overflow-hidden">
+        <header className="flex items-center justify-between mb-3 pl-2 shrink-0">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase truncate">
               {phase.subModule.industry}
             </p>
-            <h1 className="text-[32px] font-semibold tracking-tight mt-1">{current}</h1>
+            <h1 className="text-[20px] font-semibold tracking-tight leading-tight truncate">
+              {current}
+            </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <div
-              className="px-4 h-11 flex items-center gap-2 text-[12px] text-muted-foreground shadow-sm"
-              style={{ ...SURFACE_STYLE, borderRadius: 18, border: "1px solid #F2F2F7" }}
+              className="px-3 h-8 flex items-center gap-2 text-[11px] text-muted-foreground shadow-sm"
+              style={{ ...SURFACE_STYLE, borderRadius: 12, border: "1px solid #F2F2F7" }}
             >
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               Synapse Live
@@ -381,7 +383,12 @@ export function LiquidOS() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+        <div
+          className="flex-1 min-h-0 grid gap-2 auto-rows-fr overflow-hidden"
+          style={{
+            gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, Math.ceil(Math.sqrt(bites.length))))}, minmax(0, 1fr))`,
+          }}
+        >
           {bites.map((nb) => (
             <NanoBiteRenderer
               key={nb.id}
