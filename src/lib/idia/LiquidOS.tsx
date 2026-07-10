@@ -34,6 +34,27 @@ const ATOM_FILE_MAP: Record<string, string> = {
   "hosp.ft.infra.health": "HealthPermitLog",
   "hosp.ft.ops.restock": "CommissaryRestock",
   "hosp.ft.ops.tva.variance": "TvAVarianceManager",
+  // Food Truck Pico-Bites (20)
+  "hosp.ft.pos.item_add": "QuickFireItemAdd",
+  "hosp.ft.pos.mod_apply": "ModifierApplication",
+  "hosp.ft.pos.kds_fire": "KdsTicketRouting",
+  "hosp.ft.pos.void_comp": "RapidCompVoid",
+  "hosp.ft.inv.status_86": "LongPress86ing",
+  "hosp.ft.inv.deplete_recipe": "RecipeDepletion",
+  "hosp.ft.inv.log_waste": "LogWasteSpoilage",
+  "hosp.ft.inv.receive_stock": "RestockReceive",
+  "hosp.ft.pay.init_nfc": "ContactlessTap",
+  "hosp.ft.pay.offline_auth": "OfflineFallback",
+  "hosp.ft.pay.batch_sync": "CloudReSync",
+  "hosp.ft.pay.drawer_state": "DrawerState",
+  "hosp.ft.fleet.loc_lock": "GpsCheckIn",
+  "hosp.ft.fleet.time_punch": "TimePunch",
+  "hosp.ft.fleet.cash_drop": "MidShiftDrop",
+  "hosp.ft.fleet.shift_review": "ShiftReview",
+  "hosp.ft.rpt.view_pmix": "ViewPmix",
+  "hosp.ft.rpt.view_labor_sales": "LaborVsSales",
+  "hosp.ft.rpt.loc_compare": "LocationCompare",
+  "hosp.ft.rpt.export_ledger": "LedgerExport",
 };
 
 type Phase =
