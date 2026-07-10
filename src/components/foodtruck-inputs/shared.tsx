@@ -300,20 +300,26 @@ export function PicoCard({
 }) {
   return (
     <div
-      className="bg-white p-6 flex flex-col gap-4"
+      className="bg-white p-3 flex flex-col gap-2 min-h-0 overflow-hidden"
       style={{
-        borderRadius: 24,
+        borderRadius: 16,
         border: "1px solid #F2F2F7",
         boxShadow: "var(--idia-shadow-card)",
       }}
     >
-      <header>
-        <h3 className="text-[18px] font-semibold tracking-tight">{title}</h3>
+      <header className="shrink-0">
+        <h3 className="text-[13px] font-semibold tracking-tight leading-tight truncate">
+          {title}
+        </h3>
         {subtitle && (
-          <p className="text-[12px] text-muted-foreground mt-1">{subtitle}</p>
+          <p className="text-[10px] text-muted-foreground leading-tight truncate">
+            {subtitle}
+          </p>
         )}
       </header>
-      {children}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2 [&_button]:min-h-[36px] [&_button]:text-[12px] [&_button]:px-3 [&_button]:rounded-lg [&_input]:h-8 [&_input]:text-[12px] [&_label]:text-[10px] [&_p]:text-[11px] [&_h4]:text-[12px]">
+        {children}
+      </div>
     </div>
   );
 }
