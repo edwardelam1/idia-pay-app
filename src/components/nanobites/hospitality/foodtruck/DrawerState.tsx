@@ -1,13 +1,14 @@
 /**
  * Pico-Bite 3.4 · hosp.ft.pay.drawer_state
- * Drawer State — No Sale / Pause Till gated by manager PIN; pulses cash drawer.
+ * Drawer State — No Sale / Pause Till gated by manager PIN + biometric.
  */
 import { useState } from "react";
 import { toast } from "sonner";
 import { recordExecution } from "@/lib/idia/executions";
 import {
   ActionButton,
-  Numpad,
+  ManagerAuth,
+  type ManagerAuthResult,
   PicoCard,
   SUBMODULE_ID,
   useCartonCode,
@@ -21,7 +22,7 @@ export default function DrawerState() {
   const [pending, setPending] = useState<"no_sale" | "pause_till" | null>(null);
   const [paused, setPaused] = useState(false);
 
-  const confirm = (pin: string) => {
+  const confirm = (auth: ManagerAuthResult) => {
     if (!pending) return;
     console.log(`[HARDWARE_STUB]: RJ11 pulse → cash drawer action=${pending}`);
     recordExecution({
@@ -30,7 +31,13 @@ export default function DrawerState() {
       nanoBiteId: NANO_BITE_ID,
       screen: SCREEN,
       action: NANO_BITE_ID,
-      payload: { state: pending, managerPinLength: pin.length, simulated: true },
+      payload: {
+        state: pending,
+        authMethod: `pin+${auth.method}`,
+        managerPinLength: auth.pinLength,
+        credentialId: auth.credentialId ?? null,
+        simulated: true,
+      },
     });
     if (pending === "pause_till") setPaused((p) => !p);
     toast.success(pending === "no_sale" ? "Drawer opened" : "Till state toggled");
@@ -38,7 +45,7 @@ export default function DrawerState() {
   };
 
   return (
-    <PicoCard title="Drawer State" subtitle="No Sale open or Pause Till (PIN required)">
+    <PicoCard title="Drawer State" subtitle="No Sale open or Pause Till (PIN + biometric)">
       <div className="p-3 rounded-xl bg-secondary flex items-center justify-between">
         <span className="text-[12px] text-muted-foreground">Till</span>
         <span
@@ -53,13 +60,11 @@ export default function DrawerState() {
           {paused ? "Resume Till" : "Pause Till"}
         </ActionButton>
       </div>
-      <Numpad
+      <ManagerAuth
         open={pending !== null}
-        title="Manager PIN"
-        mode="pin"
-        maxLength={6}
+        title="Manager"
         onCancel={() => setPending(null)}
-        onSubmit={confirm}
+        onAuthed={confirm}
       />
     </PicoCard>
   );
