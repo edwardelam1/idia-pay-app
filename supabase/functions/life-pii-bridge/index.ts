@@ -28,18 +28,20 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_KEY =
-      Deno.env.get("IDIA_SECRET_KEY") ??
-      Deno.env.get("IDIA_PUBLISHABLE_KEY");
+    const candidates = [
+      Deno.env.get("IDIA_SECRET_KEY"),
+      Deno.env.get("IDIA_PUBLISHABLE_KEY"),
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+      Deno.env.get("SUPABASE_ANON_KEY"),
+      Deno.env.get("SUPABASE_PUBLISHABLE_KEY"),
+    ];
+    const SUPABASE_KEY = candidates.find(
+      (k): k is string => !!k && !isLegacySupabaseJwtKey(k),
+    );
 
     if (!SUPABASE_URL || !SUPABASE_KEY) {
-      console.error("[life-pii-bridge] Missing SUPABASE_URL or key");
-      return json({ error: "Server misconfigured" }, 500);
-    }
-
-    if (isLegacySupabaseJwtKey(SUPABASE_KEY)) {
-      console.error("[life-pii-bridge] Supabase key is a disabled legacy JWT");
-      return json({ error: "Server misconfigured" }, 500);
+      console.error("[life-pii-bridge] No usable Supabase key in env (IDIA_SECRET_KEY / IDIA_PUBLISHABLE_KEY missing or legacy JWT)");
+      return json({ error: "Server misconfigured: set IDIA_SECRET_KEY edge function secret" }, 500);
     }
 
     const authHeader = req.headers.get("Authorization");
