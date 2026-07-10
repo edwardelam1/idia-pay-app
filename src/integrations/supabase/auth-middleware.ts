@@ -4,6 +4,8 @@ import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
 
+const CURRENT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B';
+
 function isLegacySupabaseJwtKey(key: string) {
   return key.trim().startsWith('eyJ');
 }
@@ -13,7 +15,11 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
   async ({ next }) => {
     
     const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_PUBLISHABLE_KEY = process.env.IDIA_PUBLISHABLE_KEY;
+    const configuredPublishableKey = process.env.IDIA_PUBLISHABLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
+    const SUPABASE_PUBLISHABLE_KEY =
+      configuredPublishableKey && !isLegacySupabaseJwtKey(configuredPublishableKey)
+        ? configuredPublishableKey
+        : CURRENT_SUPABASE_PUBLISHABLE_KEY;
 
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
       const missing = [
