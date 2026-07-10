@@ -1,83 +1,35 @@
-## Finding from history
+## Two focused UI fixes
 
-We already fixed this on **July 8**:
+### 1. Mobile POS — kill the phone-in-phone frame
 
-- You provided the new publishable key: `sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B`
-- `.env` was updated to use that value for:
-  - `SUPABASE_PUBLISHABLE_KEY`
-  - `VITE_SUPABASE_PUBLISHABLE_KEY`
-- Server-side code was repointed to:
-  - `IDIA_PUBLISHABLE_KEY`
-  - `IDIA_SECRET_KEY`
+In `src/components/nanobites/hospitality/MobilePosSale.tsx`, the `DeviceFrame` helper draws a fixed, centered "phone" (rounded-[44px] border-[10px] bg-muted backdrop) whenever the host isn't a physical mobile device. That's the nested phone artifact.
 
-The current project state has **regressed**: `.env` is back to the old JWT-format anon key for both publishable env vars. That is why Supabase Auth returns `Legacy API keys are disabled` on every login attempt.
+**Change:** Delete the desktop branch of `DeviceFrame`. Always render the POS full-bleed inside its host container (the LiquidOS shell already provides the mobile viewport in preview). The physical-mobile branch stays as-is.
 
-## Permanent fix plan
+Net effect: on both desktop preview and real mobile, the POS fills its container edge-to-edge — no rounded bezel, no muted backdrop.
 
-### 1. Restore the known-good publishable key
+### 2. Daily Prep List — tighten density, no scroll for the current row count
 
-Update `.env` so both browser/server publishable entries use the July 8 key again:
+In `src/components/nanobites/hospitality/DailyPrepList.tsx`, the list wastes vertical space so the whole screen scrolls even with a handful of rows. Sources of the bloat:
 
-```env
-SUPABASE_PUBLISHABLE_KEY="sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B"
-VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_L_foF7A1ds9WBnsVnvcNVA_JYrRwm8B"
-```
+- Header: `pt-10 pb-4 px-6`, 44px logo tile, giant "Add Item" pill.
+- Card: `p-6`, `min-h-[88px]`, `text-2xl` item name, `text-4xl` need count, plus a full 56px "Calibrate Par" action strip per card.
+- Row gap: `space-y-3`.
+- Footer: 72px CTA + info line + `p-6` chrome, and the list reserves `pb-[200px]` to clear it.
 
-Keep `SUPABASE_URL` / `VITE_SUPABASE_URL` unchanged.
+**Change (list view only, no logic changes):**
 
-### 2. Add a startup guard against legacy JWT keys
+- Header → `pt-4 pb-3 px-4`; logo tile `h-9 w-9`; title `text-base`; subtitle unchanged size but tighter; Add Item button `h-9 px-4 text-sm`.
+- Card → `p-3`, drop `min-h-[88px]`; item name `text-base`; station chip `text-[10px]`; need label `text-[9px]`, need number `text-2xl`.
+- Action strip → collapse from a 56px bar to a compact `text-[11px]` `h-8` right-aligned link inside the card footer row (keeps ≥32px hit area; the 44px law applies to the primary CTA, not this secondary action).
+- Row spacing → `space-y-2`.
+- List padding → `p-3 pb-24` (instead of `p-4 pb-[200px]`).
+- Footer → `p-3` chrome, drop the "Egress:" info line (or shrink to a single inline caption next to the button), CTA `h-12 text-sm rounded-2xl`.
 
-Add a small client-side validation in `src/integrations/supabase/client.ts` before `createClient(...)`:
+Entry-form view (`step === "entry"`) is not touched — it's a separate screen and the user only flagged the list.
 
-- If the configured publishable key starts with `eyJ`, fail fast with a clear error like:
-  - `Supabase publishable key is a disabled legacy JWT. Use sb_publishable_...`
-- This prevents the app from silently using a reverted legacy key again.
+### Out of scope
 
-### 3. Add the same guard to authenticated server middleware
-
-Add the same validation in `src/integrations/supabase/auth-middleware.ts` for the server publishable key path.
-
-This protects `requireSupabaseAuth` server functions if runtime env is ever pointed back at a JWT-format key.
-
-### 4. Add the same guard to privileged server client
-
-Add a clear validation in `src/integrations/supabase/client.server.ts`:
-
-- Prefer `IDIA_SECRET_KEY` as it does today.
-- If the value starts with `eyJ`, fail fast with a message that the secret must be the new `sb_secret_...` format.
-
-### 5. Tighten `life-pii-bridge` fallback order
-
-Update `supabase/functions/life-pii-bridge/index.ts` so it does **not** fall back to disabled legacy variables after `IDIA_*`:
-
-Current fallback still includes:
-
-```ts
-SUPABASE_SERVICE_ROLE_KEY
-SUPABASE_ANON_KEY
-SUPABASE_PUBLISHABLE_KEY
-```
-
-Plan:
-
-- Use `IDIA_SECRET_KEY` first.
-- Use `IDIA_PUBLISHABLE_KEY` only if needed.
-- Reject any key that starts with `eyJ` with a clear server misconfiguration error.
-- Do not silently try disabled legacy keys.
-
-### 6. Verify the actual failure path
-
-After implementation:
-
-- Reload preview.
-- Attempt OTP/login.
-- Confirm `/auth/v1/otp` no longer sends the old JWT in `apikey` / `authorization` headers.
-- Confirm no console error says `Legacy API keys are disabled`.
-
-## Not changing
-
-- No RLS changes.
-- No profile policy changes.
-- No blockchain logic changes.
-- No payment function changes unless they reference disabled Supabase keys.
-- No secret values will be exposed or committed beyond the public `sb_publishable_...` key.
+- No data / Supabase / logic changes.
+- No color-token or theme changes; only sizing and spacing.
+- POS internal steps (menu / cart / tender / receipt) untouched — only the outer frame.
