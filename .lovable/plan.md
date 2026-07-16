@@ -1,49 +1,30 @@
-## Problem
-The app frame is still scrolling, so the header/footer borders inside each Nano-Bite card shift with the content instead of staying pinned to the viewport.
+## Root cause
 
-## Plan
+The Prep screen (`DailyPrepList.tsx`) queries `public.daily_prep_list`, but that table does not exist in the database. Every mount fails, the toast shows "Discovery Failed: Artifact registry unreachable", and the spinner stays until the catch block runs (which it does — so if it appears "stuck," it's the initial fetch failing repeatedly / the empty list state after failure).
 
-### 1. Freeze the document root
-In `src/styles.css`, add a global rule so the browser itself cannot scroll:
+`inventory_demand` (used by the "VAULT DEMAND SIGNAL" action) does exist.
 
-```css
-html, body {
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-```
+## Fix
 
-### 2. Convert every full-screen shell from `min-h-screen` to `h-screen overflow-hidden`
-The current shells can grow past the viewport. Change them to exactly viewport height with no overflow:
+Create the missing `public.daily_prep_list` table via migration, with the columns the component reads/writes:
 
-- `src/providers/TenancyProvider.tsx` — booting and rejected states
-- `src/components/nanobites/system/TerminalProvisionGate.tsx` — root container
-- `src/components/nanobites/system/AuthGate.tsx` — root container
-- `src/lib/idia/LiquidOS.tsx` — loading, error, selection, and operational root containers
+- `business_id` (text)
+- `location` (text)
+- `item_name` (text)
+- `unit` (text)
+- `on_hand` (numeric)
+- `par_level` (numeric)
+- `station` (text, constrained to Cold/Griddle/Assembly)
+- standard `id`, `created_at`, `updated_at`
 
-### 3. Lock the operational grid rows
-In `src/lib/idia/LiquidOS.tsx`:
+Add:
+- GRANTs to `authenticated` and `service_role` (public schema requirement)
+- RLS enabled
+- Policy allowing authenticated users to manage rows for now (matches how the component queries — no auth.uid scoping since `business_id` is a free-form string, not a user id)
+- `updated_at` trigger
 
-- Replace the grid's `auto-rows-fr` Tailwind class with an inline style:
-  ```ts
-  gridAutoRows: 'minmax(0, 1fr)'
-  ```
-  This prevents grid rows from expanding when card content is tall.
-- Wrap each `NanoBiteRenderer` in a `min-h-0 overflow-hidden` cell so the grid item cannot force row growth.
+No component changes needed — once the table exists, discovery returns `[]` cleanly and the spinner resolves.
 
-### 4. Condense `SovereignWrapper` to fit its cell
-In `src/components/sovereign/SovereignWrapper.tsx`:
+## Follow-up (not in this change)
 
-- Remove the `minHeight: 160px` style that forces the card taller than its grid row.
-- Change the content stage from `min-h-[44px]` to `min-h-0 overflow-hidden` so it shrinks instead of pushing the card footer out of frame.
-- Keep the header/footer borders visible but allow the whole card to scale down to the available grid cell.
-
-### 5. Verify the frame is frozen
-Use a Playwright script against `http://localhost:8080` to:
-
-- Confirm no vertical/horizontal scrollbars are present on the provision, auth, and operational screens.
-- Screenshot the operational grid and confirm the Sovereign header/footer borders are fully visible and stationary within the viewport.
-
-## Outcome
-The entire app shell becomes a fixed viewport frame. The header and footer borders of each Nano-Bite stay in place, and any excess content is truncated/condensed rather than causing the page to scroll.
+The component uses `.from("daily_prep_list" as any)` casts because types weren't generated. After the migration runs, types regenerate and those casts can be removed later.
