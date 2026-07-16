@@ -384,18 +384,20 @@ export function LiquidOS() {
         </header>
 
         <div
-          className="flex-1 min-h-0 grid gap-2 auto-rows-fr overflow-hidden"
+          className="flex-1 min-h-0 grid gap-2 overflow-hidden"
           style={{
             gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, Math.ceil(Math.sqrt(bites.length))))}, minmax(0, 1fr))`,
+            gridAutoRows: 'minmax(0, 1fr)',
           }}
         >
           {bites.map((nb) => (
-            <NanoBiteRenderer
-              key={nb.id}
-              spec={nb}
-              carton={phase.carton}
-              subModule={phase.subModule}
-            />
+            <div key={nb.id} className="min-h-0 overflow-hidden">
+              <NanoBiteRenderer
+                spec={nb}
+                carton={phase.carton}
+                subModule={phase.subModule}
+              />
+            </div>
           ))}
         </div>
       </main>
