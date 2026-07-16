@@ -7,6 +7,8 @@
 
 import React, { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ProvisioningEngine } from "@/lib/provisioning-engine";
+
 import { ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
