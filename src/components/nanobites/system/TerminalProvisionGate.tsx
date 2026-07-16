@@ -85,6 +85,7 @@ interface TerminalProvisionGateProps {
 
 function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps) {
   const [code, setCode] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleProvision = async (e: React.FormEvent) => {
