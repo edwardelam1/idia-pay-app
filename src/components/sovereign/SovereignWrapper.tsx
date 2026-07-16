@@ -33,14 +33,13 @@ export const SovereignWrapper = ({ id, children, className }: SovereignWrapperPr
   return (
     <div
       className={cn(
-        "group relative flex flex-col bg-white overflow-hidden transition-all duration-300",
+        "group relative flex flex-col bg-white overflow-hidden transition-all duration-300 min-h-0",
         "border border-[#F2F2F7] shadow-[0_8px_32px_rgba(0,0,0,0.04)]",
         "hover:shadow-[0_12px_48px_rgba(0,0,0,0.08)] hover:-translate-y-0.5",
         className
       )}
       style={{
         borderRadius: 28,
-        minHeight: "160px",
       }}
     >
       {/* ─── SYSTEM HEADER (Meta Data Layer) ────────────────────────────────── */}
@@ -69,7 +68,7 @@ export const SovereignWrapper = ({ id, children, className }: SovereignWrapperPr
       </div>
 
       {/* ─── PHYSICAL STAGE (Injection Slot) ────────────────────────────────── */}
-      <div className="flex-1 p-0 relative min-h-[44px]">
+      <div className="flex-1 p-0 relative min-h-0 overflow-hidden">
         {children ? (
           <div className="animate-in fade-in duration-500">
             {children}

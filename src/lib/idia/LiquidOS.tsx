@@ -161,7 +161,7 @@ export function LiquidOS() {
   // ===== LOADING =====
   if (phase.kind === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="h-screen overflow-hidden flex items-center justify-center px-6">
         <div className="flex flex-col items-center gap-4">
           <BrandMark />
           <p className="text-[12px] text-muted-foreground">Hydrating workspace…</p>
@@ -173,7 +173,7 @@ export function LiquidOS() {
   // ===== ERROR =====
   if (phase.kind === "error") {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="h-screen overflow-hidden flex items-center justify-center px-6">
         <div
           className="max-w-md w-full bg-white p-8 text-center"
           style={{ borderRadius: 28, border: "1px solid #FF3B30" }}
@@ -202,7 +202,7 @@ export function LiquidOS() {
     const looped = [...phase.carton.subModules, ...phase.carton.subModules];
     return (
       <div
-        className="min-h-screen flex bg-[#FBFBFD] overflow-hidden relative"
+        className="h-screen overflow-hidden flex bg-[#FBFBFD] relative"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -291,7 +291,7 @@ export function LiquidOS() {
 
   return (
     <div
-      className="min-h-screen flex bg-[#FBFBFD] overflow-hidden relative"
+      className="h-screen overflow-hidden flex bg-[#FBFBFD] relative"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -384,18 +384,20 @@ export function LiquidOS() {
         </header>
 
         <div
-          className="flex-1 min-h-0 grid gap-2 auto-rows-fr overflow-hidden"
+          className="flex-1 min-h-0 grid gap-2 overflow-hidden"
           style={{
             gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, Math.ceil(Math.sqrt(bites.length))))}, minmax(0, 1fr))`,
+            gridAutoRows: 'minmax(0, 1fr)',
           }}
         >
           {bites.map((nb) => (
-            <NanoBiteRenderer
-              key={nb.id}
-              spec={nb}
-              carton={phase.carton}
-              subModule={phase.subModule}
-            />
+            <div key={nb.id} className="min-h-0 overflow-hidden">
+              <NanoBiteRenderer
+                spec={nb}
+                carton={phase.carton}
+                subModule={phase.subModule}
+              />
+            </div>
           ))}
         </div>
       </main>

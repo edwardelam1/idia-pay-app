@@ -167,7 +167,7 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
   // --- RENDER MATRIX ---
   if (status === "booting" || status === "resolving") {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background p-4 gap-4">
+      <div className="h-screen overflow-hidden w-full flex flex-col items-center justify-center bg-background p-4 gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
         <p className="text-lg font-bold text-foreground">
           {status === "booting" ? "Booting LiquidOS" : "Decrypting Clearance"}
@@ -197,7 +197,7 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
 
   if (status === "rejected") {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background p-6 gap-4 text-center">
+      <div className="h-screen overflow-hidden w-full flex flex-col items-center justify-center bg-background p-6 gap-4 text-center">
         <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
           <AlertOctagon className="w-8 h-8 text-destructive" />
         </div>

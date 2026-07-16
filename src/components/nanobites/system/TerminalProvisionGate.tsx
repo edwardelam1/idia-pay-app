@@ -277,7 +277,7 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-background p-4">
+    <div className="h-screen overflow-hidden w-full flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md rounded-3xl shadow-2xl border-none">
         <CardContent className="p-8 space-y-8">
           <div className="text-center space-y-2">
