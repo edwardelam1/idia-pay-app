@@ -5,7 +5,7 @@
  * INDUSTRY: agnostic
  */
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,12 +54,38 @@ export const HardwareStorage = {
   },
 };
 
+function formatProvisioningCode(
+  raw: string,
+  cursor = raw.length,
+): { value: string; cursor: number } {
+  const cleaned = raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const chunks: string[] = [];
+  for (let i = 0; i < cleaned.length; i += 4) {
+    chunks.push(cleaned.slice(i, i + 4));
+  }
+  const value = chunks.join("-");
+
+  const alnumBefore = raw.slice(0, cursor).replace(/[^A-Za-z0-9]/g, "").length;
+  let newCursor = value.length;
+  let count = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (/[A-Z0-9]/.test(value[i])) count++;
+    if (count === alnumBefore) {
+      newCursor = i + 1;
+      break;
+    }
+  }
+  return { value, cursor: newCursor };
+}
+
 interface TerminalProvisionGateProps {
   onProvisioned: (businessId: string, name: string) => void;
 }
 
+
 function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps) {
   const [code, setCode] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleProvision = async (e: React.FormEvent) => {
@@ -71,7 +97,8 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       `[BEGIN] [${LOG_ID}] Attempting to bind terminal with code: ${code}`,
     );
 
-    if (!code.trim() || code.length < 5) {
+    const strippedCode = code.replace(/-/g, "");
+    if (!strippedCode.trim() || strippedCode.length < 5) {
       logPlanck(
         "STALL",
         "VALIDATION_FAIL",
@@ -272,10 +299,21 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
               </Label>
               <Input
                 id="prov-code"
+                ref={inputRef}
                 type="text"
                 placeholder="IDIA-XXXX-XXXX"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  const start = e.target.selectionStart ?? e.target.value.length;
+                  const { value: formatted, cursor } = formatProvisioningCode(
+                    e.target.value,
+                    start,
+                  );
+                  setCode(formatted);
+                  window.setTimeout(() => {
+                    inputRef.current?.setSelectionRange(cursor, cursor);
+                  }, 0);
+                }}
                 className="h-[72px] min-h-[44px] rounded-2xl bg-background border-none text-center text-2xl font-black tracking-widest shadow-sm px-6 uppercase"
                 disabled={isProcessing}
                 autoFocus
