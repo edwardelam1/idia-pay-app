@@ -1,6 +1,8 @@
-// IDIA Pay - Live Registry: fetches vertical cartons from Supabase
-// (table: device_provisioning_blueprints, column: payload).
-import { supabase } from "@/integrations/supabase/client";
+// IDIA Pay - Live Registry: normalizes a hydrated blueprint (from
+// ProvisioningEngine.hydrateFromHub, the single hydration entry point) into a
+// VerticalCarton for LiquidOS. No direct table reads — RLS blocks anon.
+import { ProvisioningEngine } from "@/lib/provisioning-engine";
+
 
 export type NanoBiteSpec = {
   id: string;
