@@ -88,25 +88,22 @@ export async function fetchProvisioningBlueprint(
 ): Promise<VerticalCarton | null> {
   const trimmed = code.trim().toUpperCase();
   console.log(`[DATABASE_HANDSHAKE]: START - Requesting manifest for code ${trimmed}`);
-  const { data, error } = await supabase
-    .from("device_provisioning_blueprints")
-    .select("code, payload")
-    .ilike("code", trimmed)
-    .maybeSingle();
-
-  if (error) {
-    console.log(`[DATABASE_HANDSHAKE]: END - error ${error.message}`);
+  let payload: Record<string, unknown> | null = null;
+  try {
+    const blueprint = await ProvisioningEngine.hydrateFromHub(trimmed);
+    payload = (blueprint as unknown as Record<string, unknown>) ?? null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`[DATABASE_HANDSHAKE]: END - hydration failed: ${msg}`);
     return null;
   }
-  if (!data) {
+  if (!payload) {
     console.log(`[DATABASE_HANDSHAKE]: END - no manifest for ${trimmed}`);
     return null;
   }
   console.log(`[DATABASE_HANDSHAKE]: END - Success. JSON payload retrieved.`);
-  const carton = normalizePayload(
-    data.code as string,
-    (data.payload as Record<string, unknown>) || {},
-  );
+  const carton = normalizePayload(trimmed, payload);
+
   console.log(
     `[OS_HYDRATION]: START - Analyzing screenTags for sidebar generation (${carton.subModules.length} sub-modules).`,
   );
