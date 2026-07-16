@@ -144,11 +144,16 @@
     border-color: var(--color-border);
   }
 
+  html,
   body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
 }
+
 
 @keyframes idia-loop {
   0% { transform: translateY(0); }
