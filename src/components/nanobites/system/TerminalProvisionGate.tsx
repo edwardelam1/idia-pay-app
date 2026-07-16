@@ -54,9 +54,34 @@ export const HardwareStorage = {
   },
 };
 
+function formatProvisioningCode(
+  raw: string,
+  cursor = raw.length,
+): { value: string; cursor: number } {
+  const cleaned = raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const chunks: string[] = [];
+  for (let i = 0; i < cleaned.length; i += 4) {
+    chunks.push(cleaned.slice(i, i + 4));
+  }
+  const value = chunks.join("-");
+
+  const alnumBefore = raw.slice(0, cursor).replace(/[^A-Za-z0-9]/g, "").length;
+  let newCursor = value.length;
+  let count = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (/[A-Z0-9]/.test(value[i])) count++;
+    if (count === alnumBefore) {
+      newCursor = i + 1;
+      break;
+    }
+  }
+  return { value, cursor: newCursor };
+}
+
 interface TerminalProvisionGateProps {
   onProvisioned: (businessId: string, name: string) => void;
 }
+
 
 function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps) {
   const [code, setCode] = useState("");
