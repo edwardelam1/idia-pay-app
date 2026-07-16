@@ -299,10 +299,21 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
               </Label>
               <Input
                 id="prov-code"
+                ref={inputRef}
                 type="text"
                 placeholder="IDIA-XXXX-XXXX"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  const start = e.target.selectionStart ?? e.target.value.length;
+                  const { value: formatted, cursor } = formatProvisioningCode(
+                    e.target.value,
+                    start,
+                  );
+                  setCode(formatted);
+                  window.setTimeout(() => {
+                    inputRef.current?.setSelectionRange(cursor, cursor);
+                  }, 0);
+                }}
                 className="h-[72px] min-h-[44px] rounded-2xl bg-background border-none text-center text-2xl font-black tracking-widest shadow-sm px-6 uppercase"
                 disabled={isProcessing}
                 autoFocus
