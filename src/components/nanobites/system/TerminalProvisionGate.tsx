@@ -97,7 +97,8 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       `[BEGIN] [${LOG_ID}] Attempting to bind terminal with code: ${code}`,
     );
 
-    if (!code.trim() || code.length < 5) {
+    const strippedCode = code.replace(/-/g, "");
+    if (!strippedCode.trim() || strippedCode.length < 5) {
       logPlanck(
         "STALL",
         "VALIDATION_FAIL",
