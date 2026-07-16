@@ -7065,6 +7065,27 @@ export type Database = {
         }
         Relationships: []
       }
+      relayer_mutex: {
+        Row: {
+          expires_at: string | null
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+        }
+        Insert: {
+          expires_at?: string | null
+          id: string
+          locked_at?: string | null
+          locked_by?: string | null
+        }
+        Update: {
+          expires_at?: string | null
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+        }
+        Relationships: []
+      }
       remediation_plans: {
         Row: {
           actions: Json
@@ -7271,6 +7292,42 @@ export type Database = {
         }
         Relationships: []
       }
+      settlement_ledger_repair_queue: {
+        Row: {
+          blockchain_tx_hash: string | null
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json | null
+          phase: string
+          reference_id: string
+          resolved_at: string | null
+          user_id: string
+        }
+        Insert: {
+          blockchain_tx_hash?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          phase: string
+          reference_id: string
+          resolved_at?: string | null
+          user_id: string
+        }
+        Update: {
+          blockchain_tx_hash?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          phase?: string
+          reference_id?: string
+          resolved_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       settlement_locks: {
         Row: {
           lock_key: string
@@ -7291,24 +7348,39 @@ export type Database = {
       }
       settlement_queue: {
         Row: {
+          attempts: number
+          completed_at: string | null
           created_at: string | null
           id: string
+          last_attempt_at: string | null
+          last_error: string | null
           payload: Json
           reference_id: string
+          skipped_contributors: Json | null
           status: string | null
         }
         Insert: {
+          attempts?: number
+          completed_at?: string | null
           created_at?: string | null
           id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
           payload: Json
           reference_id: string
+          skipped_contributors?: Json | null
           status?: string | null
         }
         Update: {
+          attempts?: number
+          completed_at?: string | null
           created_at?: string | null
           id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
           payload?: Json
           reference_id?: string
+          skipped_contributors?: Json | null
           status?: string | null
         }
         Relationships: []
@@ -10690,6 +10762,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_relayer_lock: {
+        Args: { run_id: string; timeout_seconds?: number }
+        Returns: boolean
+      }
       anonymize_location: {
         Args: { lat: number; lng: number }
         Returns: string
@@ -10782,6 +10858,7 @@ export type Database = {
       }
       get_average_rating: { Args: { p_ratee_id: string }; Returns: number }
       get_hub_balance: { Args: { uid: string }; Returns: number }
+      get_omni_aggregates: { Args: { pseudo_id: string }; Returns: Json }
       get_real_library_yield: {
         Args: never
         Returns: {
@@ -11015,6 +11092,7 @@ export type Database = {
         Args: { _application_id: string }
         Returns: number
       }
+      release_relayer_lock: { Args: { run_id: string }; Returns: undefined }
       revoke_employee: {
         Args: { _employee_id: string }
         Returns: {
@@ -11186,6 +11264,7 @@ export type Database = {
         | "hub_protocol_fee"
         | "synapse_purchase"
         | "."
+        | "idia_royalty_yield"
       sync_status: "pending" | "processing" | "completed" | "failed"
       user_role: "leadership" | "manager" | "employee" | "csuite"
     }
@@ -11348,6 +11427,7 @@ export const Constants = {
         "hub_protocol_fee",
         "synapse_purchase",
         ".",
+        "idia_royalty_yield",
       ],
       sync_status: ["pending", "processing", "completed", "failed"],
       user_role: ["leadership", "manager", "employee", "csuite"],
