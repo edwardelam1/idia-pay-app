@@ -1,6 +1,8 @@
-// IDIA Pay - Live Registry: fetches vertical cartons from Supabase
-// (table: device_provisioning_blueprints, column: payload).
-import { supabase } from "@/integrations/supabase/client";
+// IDIA Pay - Live Registry: normalizes a hydrated blueprint (from
+// ProvisioningEngine.hydrateFromHub, the single hydration entry point) into a
+// VerticalCarton for LiquidOS. No direct table reads — RLS blocks anon.
+import { ProvisioningEngine } from "@/lib/provisioning-engine";
+
 
 export type NanoBiteSpec = {
   id: string;
@@ -86,25 +88,22 @@ export async function fetchProvisioningBlueprint(
 ): Promise<VerticalCarton | null> {
   const trimmed = code.trim().toUpperCase();
   console.log(`[DATABASE_HANDSHAKE]: START - Requesting manifest for code ${trimmed}`);
-  const { data, error } = await supabase
-    .from("device_provisioning_blueprints")
-    .select("code, payload")
-    .ilike("code", trimmed)
-    .maybeSingle();
-
-  if (error) {
-    console.log(`[DATABASE_HANDSHAKE]: END - error ${error.message}`);
+  let payload: Record<string, unknown> | null = null;
+  try {
+    const blueprint = await ProvisioningEngine.hydrateFromHub(trimmed);
+    payload = (blueprint as unknown as Record<string, unknown>) ?? null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`[DATABASE_HANDSHAKE]: END - hydration failed: ${msg}`);
     return null;
   }
-  if (!data) {
+  if (!payload) {
     console.log(`[DATABASE_HANDSHAKE]: END - no manifest for ${trimmed}`);
     return null;
   }
   console.log(`[DATABASE_HANDSHAKE]: END - Success. JSON payload retrieved.`);
-  const carton = normalizePayload(
-    data.code as string,
-    (data.payload as Record<string, unknown>) || {},
-  );
+  const carton = normalizePayload(trimmed, payload);
+
   console.log(
     `[OS_HYDRATION]: START - Analyzing screenTags for sidebar generation (${carton.subModules.length} sub-modules).`,
   );

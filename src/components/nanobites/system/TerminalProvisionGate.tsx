@@ -6,7 +6,9 @@
  */
 
 import React, { useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { ProvisioningEngine } from "@/lib/provisioning-engine";
+
+
 import { ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,57 +117,24 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       logPlanck(
         "PROCESS",
         "PROVISION_LOOKUP",
-        `[STEP] [${LOG_ID}] Invoking hydrate-terminal edge function for secure RLS bypass.`,
+        `[STEP] [${LOG_ID}] Delegating to ProvisioningEngine.hydrateFromHub (single hydration entry point).`,
       );
 
-      const { data, error } = await supabase.functions.invoke("hydrate-terminal", {
-        body: { pairing_code: sanitizedCode },
-      });
-
-      if (error) {
+      let payloadObj: unknown;
+      try {
+        payloadObj = await ProvisioningEngine.hydrateFromHub(sanitizedCode);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         logPlanck(
           "STALL",
           "PROVISION_FAILED",
-          `[ERROR_BEGIN] [${LOG_ID}] Edge function invocation failed. [ERROR_DETAIL] ${error.message} [ERROR_END]`,
-        );
-        toast.error("System Error: Could not verify provisioning code.");
-        setIsProcessing(false);
-        return;
-      }
-
-      const envelope = data as
-        | { success?: boolean; payload?: Record<string, unknown> }
-        | null;
-
-      if (!envelope || !envelope.success || !envelope.payload) {
-        logPlanck(
-          "STALL",
-          "PROVISION_FAILED",
-          `[ERROR_BEGIN] [${LOG_ID}] Edge function rejected code or payload was empty. [ERROR_DETAIL] Invalid payload received from Hub. [ERROR_END]`,
+          `[ERROR_BEGIN] [${LOG_ID}] Hydration failed. [ERROR_DETAIL] ${msg} [ERROR_END]`,
         );
         toast.error("Provisioning code not recognized. Verify with your Org Admin.");
         setIsProcessing(false);
         return;
       }
 
-      // 1. Handle stringified JSON defensively
-      let payloadObj: unknown = envelope.payload;
-      if (typeof payloadObj === "string") {
-        try {
-          payloadObj = JSON.parse(payloadObj);
-          logPlanck(
-            "PROCESS",
-            "PROVISION_PARSE",
-            `[STEP] [${LOG_ID}] Successfully parsed stringified payload.`,
-          );
-        } catch {
-          logPlanck(
-            "PROCESS",
-            "PROVISION_PARSE",
-            `[STEP] [${LOG_ID}] Payload is a string but failed to parse as JSON.`,
-          );
-        }
-      }
 
       // 2. Inspection logging — root keys to Planck + full dump to DevTools
       const rootKeys =
