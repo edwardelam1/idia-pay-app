@@ -7,7 +7,7 @@
 
 import React, { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { HardDrive, ScanLine } from "lucide-react";
+import { ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -254,8 +254,12 @@ function TerminalProvisionGateCore({ onProvisioned }: TerminalProvisionGateProps
       <Card className="w-full max-w-md rounded-3xl shadow-2xl border-none">
         <CardContent className="p-8 space-y-8">
           <div className="text-center space-y-2">
-            <div className="w-20 h-20 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center">
-              <HardDrive className="w-10 h-10 text-primary" />
+            <div className="w-20 h-20 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden">
+              <img
+                src="/idia-pay-logo.png"
+                alt="IDIA Pay"
+                className="w-full h-full object-cover"
+              />
             </div>
             <h1 className="text-3xl font-black text-foreground">Provision Terminal</h1>
             <p className="text-sm text-muted-foreground">Unlinked Hardware Detected</p>
