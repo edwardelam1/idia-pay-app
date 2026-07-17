@@ -3,7 +3,7 @@
  * Each component receives `{ telemetryTag, config, onAction, gateSatisfied }`
  * and emits user intent through `onAction`. No storage, no side effects.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { PicoBiteProps } from "@/lib/idia/pico-bite";
 import { ActionButton, PicoCard, LongPressButton, Numpad, ManagerAuth } from "./primitives";
