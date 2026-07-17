@@ -114,9 +114,9 @@ export const PICO_BITE_REGISTRY: Record<string, PicoBiteEntry> = {
     },
   },
   "hosp.ft.pos.kds_fire": {
-    component: KdsTicketRouting,
+    component: KdsFireTicket,
     gate: "shift-lock",
-    defaultConfig: { station: "Grill" },
+    defaultConfig: { cart: [] },
   },
   "hosp.ft.pos.void_comp": {
     component: RapidCompVoid,
