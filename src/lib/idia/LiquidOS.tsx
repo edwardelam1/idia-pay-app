@@ -13,6 +13,9 @@ import {
   subscribeExecutions,
   type ExecutionRecord,
 } from "@/lib/idia/executions";
+import { getPicoBite, type GatePolicy } from "@/components/pico-bites/registry";
+import { TelemetryBus } from "@/lib/idia/telemetry-bus";
+import { useShiftLock } from "@/components/pico-bites/primitives";
 
 import SovereignWrapper from "@/components/sovereign/SovereignWrapper";
 import {
