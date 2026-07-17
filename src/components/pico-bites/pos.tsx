@@ -309,3 +309,110 @@ export function OrderPacingTimer({
     </PicoCard>
   );
 }
+
+// ---------- 1.8 Order Type Change ----------------------------------------
+const ORDER_TYPES = ["dine_in", "takeout", "delivery", "curbside"] as const;
+type OrderType = (typeof ORDER_TYPES)[number];
+const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  dine_in: "Dine-In",
+  takeout: "Takeout",
+  delivery: "Delivery",
+  curbside: "Curbside",
+};
+export function OrderTypeChange({
+  config,
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<{ current?: OrderType }, { orderType: OrderType }>) {
+  const [active, setActive] = useState<OrderType>(config.current ?? "dine_in");
+  return (
+    <PicoCard title="Order Type" subtitle="Switch service mode">
+      <div className="grid grid-cols-2 gap-2">
+        {ORDER_TYPES.map((t) => (
+          <ActionButton
+            key={t}
+            variant={active === t ? "primary" : "ghost"}
+            disabled={!gateSatisfied}
+            onClick={() => {
+              setActive(t);
+              onAction({ orderType: t });
+            }}
+          >
+            {ORDER_TYPE_LABELS[t]}
+          </ActionButton>
+        ))}
+      </div>
+    </PicoCard>
+  );
+}
+
+// ---------- 1.9 Reopen Check ---------------------------------------------
+export function ReopenCheck({
+  config,
+  onAction,
+}: PicoBiteProps<{ recentClosed?: { id: string; total: number }[] }, { ticketId: string; managerAuthed: true }>) {
+  const recent = config.recentClosed ?? [
+    { id: "T-0997", total: 22.5 },
+    { id: "T-0998", total: 14.0 },
+    { id: "T-0999", total: 41.75 },
+  ];
+  const [pending, setPending] = useState<string | null>(null);
+  return (
+    <PicoCard title="Reopen Check" subtitle="Manager approval required">
+      <div className="flex flex-col gap-1">
+        {recent.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => setPending(c.id)}
+            className="flex items-center justify-between p-2 rounded-lg bg-secondary text-[13px]"
+          >
+            <span className="font-semibold">{c.id}</span>
+            <span className="tabular-nums text-muted-foreground">${c.total.toFixed(2)}</span>
+          </button>
+        ))}
+      </div>
+      <ManagerAuth
+        open={pending !== null}
+        title="Approve reopen"
+        onCancel={() => setPending(null)}
+        onAuthed={() => {
+          if (pending) {
+            onAction({ ticketId: pending, managerAuthed: true });
+            toast.success(`Reopened ${pending}`);
+          }
+          setPending(null);
+        }}
+      />
+    </PicoCard>
+  );
+}
+
+// ---------- 1.10 Reprint Chit --------------------------------------------
+export function ReprintChit({
+  config,
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<{ stations?: string[]; lastTicketId?: string }, { ticketId: string; station: string }>) {
+  const stations = config.stations ?? ["Grill", "Expo", "Bar", "Cold"];
+  const ticketId = config.lastTicketId ?? "last";
+  return (
+    <PicoCard title="Reprint Chit" subtitle="Re-fire to kitchen station">
+      <div className="grid grid-cols-2 gap-2">
+        {stations.map((s) => (
+          <ActionButton
+            key={s}
+            variant="ghost"
+            disabled={!gateSatisfied}
+            onClick={() => {
+              onAction({ ticketId, station: s });
+              toast.success(`Chit reprinted → ${s}`);
+            }}
+          >
+            {s}
+          </ActionButton>
+        ))}
+      </div>
+    </PicoCard>
+  );
+}
+
