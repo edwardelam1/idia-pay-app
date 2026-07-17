@@ -11,6 +11,9 @@ import {
   ModifierApplication,
   KdsTicketRouting,
   RapidCompVoid,
+  HoldSendStay,
+  CourseAssignment,
+  OrderPacingTimer,
 } from "./pos";
 import {
   LongPress86ing,
@@ -23,6 +26,11 @@ import {
   OfflineFallback,
   CloudReSync,
   DrawerState,
+  SplitEven,
+  SplitByItem,
+  TipAndClose,
+  AdjustPayment,
+  CashTender,
 } from "./payment";
 import { GpsCheckIn, TimePunch, MidShiftDrop, ShiftReview } from "./fleet";
 import {
@@ -31,6 +39,15 @@ import {
   LocationCompare,
   LedgerExport,
 } from "./analytics";
+import {
+  FloorPlan,
+  TableTimer,
+  SeatAssignment,
+  PartySize,
+  TableTransfer,
+} from "./tables";
+import { GuestLookup, LoyaltyScan, EmailReceipt } from "./customer";
+import { BreakPunch, MySalesAndTips } from "./self";
 
 export type GatePolicy = "none" | "shift-lock";
 
