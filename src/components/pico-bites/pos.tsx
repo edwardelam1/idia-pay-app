@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { PicoBiteProps } from "@/lib/idia/pico-bite";
-import { ActionButton, PicoCard, useShiftLock } from "./primitives";
+import { ActionButton, PicoCard, LongPressButton, Numpad, ManagerAuth } from "./primitives";
 
 // ---------- Types --------------------------------------------------------
 type Tile = { id: string; label: string; price?: number };
