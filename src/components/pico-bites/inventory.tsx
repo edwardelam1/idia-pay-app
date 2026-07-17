@@ -182,3 +182,116 @@ export function RestockReceive({
     </PicoCard>
   );
 }
+
+// ---------- Physical Cycle Count -----------------------------------------
+export function PhysicalCount({
+  config,
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<{ items?: Item[] }, { itemId: string; counted: number; par?: number; variance: number }>) {
+  const items = config.items ?? [
+    { id: "ing.protein", label: "Protein", par: 20 },
+    { id: "ing.tortilla", label: "Tortilla", par: 100 },
+    { id: "ing.cheese", label: "Cheese", par: 15 },
+  ];
+  const [pad, setPad] = useState<Item | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  return (
+    <PicoCard title="Cycle Count" subtitle="Physical inventory">
+      <div className="flex flex-col gap-1">
+        {items.map((it) => {
+          const c = counts[it.id];
+          const variance = c != null && it.par != null ? c - it.par : null;
+          return (
+            <button
+              key={it.id}
+              disabled={!gateSatisfied}
+              onClick={() => setPad(it)}
+              className="flex items-center justify-between p-2 rounded-lg bg-secondary text-[13px]"
+            >
+              <span className="font-semibold">{it.label}</span>
+              <span className="tabular-nums text-[12px]">
+                {c != null ? `${c} / ${it.par ?? "—"}` : `par ${it.par ?? "—"}`}
+                {variance != null && (
+                  <span
+                    className={`ml-2 ${variance < 0 ? "text-destructive" : "text-emerald-600"}`}
+                  >
+                    {variance >= 0 ? "+" : ""}
+                    {variance}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <Numpad
+        open={pad !== null}
+        title={pad ? `Count · ${pad.label}` : ""}
+        mode="pin"
+        maxLength={5}
+        onCancel={() => setPad(null)}
+        onSubmit={(v) => {
+          if (!pad) return;
+          const n = parseInt(v, 10) || 0;
+          setCounts((c) => ({ ...c, [pad.id]: n }));
+          const variance = (pad.par ?? 0) ? n - (pad.par ?? 0) : 0;
+          onAction({ itemId: pad.id, counted: n, par: pad.par, variance });
+          setPad(null);
+        }}
+      />
+    </PicoCard>
+  );
+}
+
+// ---------- Timed 86 -----------------------------------------------------
+const TIMED_86_PRESETS = [30, 60, 120, 240] as const;
+export function Timed86({
+  config,
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<{ items?: { id: string; label: string }[] }, { itemId: string; until: string; minutes: number }>) {
+  const items = config.items ?? [
+    { id: "sku.taco", label: "Taco" },
+    { id: "sku.burrito", label: "Burrito" },
+    { id: "sku.nachos", label: "Nachos" },
+  ];
+  const [selected, setSelected] = useState<string | null>(null);
+  const trigger = (min: number) => {
+    if (!selected) return;
+    const until = new Date(Date.now() + min * 60_000).toISOString();
+    onAction({ itemId: selected, until, minutes: min });
+    setSelected(null);
+  };
+  return (
+    <PicoCard title="Timed 86" subtitle="86 with auto-return">
+      <div className="grid grid-cols-2 gap-2">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            disabled={!gateSatisfied}
+            onClick={() => setSelected(it.id)}
+            className={`min-h-[44px] rounded-xl text-[13px] font-semibold ${
+              selected === it.id ? "bg-primary text-primary-foreground" : "bg-secondary"
+            }`}
+          >
+            {it.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-2 border-t pt-2">
+        {TIMED_86_PRESETS.map((m) => (
+          <ActionButton
+            key={m}
+            variant="ghost"
+            disabled={!gateSatisfied || !selected}
+            onClick={() => trigger(m)}
+          >
+            {m < 60 ? `${m}m` : `${m / 60}h`}
+          </ActionButton>
+        ))}
+      </div>
+    </PicoCard>
+  );
+}
+
