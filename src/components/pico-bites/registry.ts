@@ -14,12 +14,17 @@ import {
   HoldSendStay,
   CourseAssignment,
   OrderPacingTimer,
+  OrderTypeChange,
+  ReopenCheck,
+  ReprintChit,
 } from "./pos";
 import {
   LongPress86ing,
   RecipeDepletion,
   LogWasteSpoilage,
   RestockReceive,
+  PhysicalCount,
+  Timed86,
 } from "./inventory";
 import {
   ContactlessTap,
@@ -31,8 +36,20 @@ import {
   TipAndClose,
   AdjustPayment,
   CashTender,
+  Refund,
+  ReprintReceipt,
+  GiftCardSell,
+  GiftCardRedeem,
+  DiscountApply,
 } from "./payment";
-import { GpsCheckIn, TimePunch, MidShiftDrop, ShiftReview } from "./fleet";
+import {
+  GpsCheckIn,
+  TimePunch,
+  MidShiftDrop,
+  ShiftReview,
+  CashPayout,
+  DepositEnvelope,
+} from "./fleet";
 import {
   ViewPmix,
   LaborVsSales,
@@ -46,8 +63,8 @@ import {
   PartySize,
   TableTransfer,
 } from "./tables";
-import { GuestLookup, LoyaltyScan, EmailReceipt } from "./customer";
-import { BreakPunch, MySalesAndTips } from "./self";
+import { GuestLookup, LoyaltyScan, EmailReceipt, GuestSave, GuestNotes } from "./customer";
+import { BreakPunch, MySalesAndTips, TableHandoff, EmployeeBroadcast } from "./self";
 
 export type GatePolicy = "none" | "shift-lock";
 
