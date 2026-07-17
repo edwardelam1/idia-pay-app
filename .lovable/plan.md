@@ -1,90 +1,58 @@
-# FOH Coverage Audit — Toast Skills 101 vs. Current Pico-Bites
+## Goal
+Turn the current one-button "Fire Ticket" stub into a real Toast-style Kitchen Display System — with prep stations, expediter vs prep-station device roles, live tickets, bump/recall, and All Day View — backed by real Supabase tables and realtime updates. No mock data.
 
-## Current 20 Pico-Bites (already shipped)
+## Toast KDS features to cover
+From the Toast article:
+1. Fire tickets from POS → appear on KDS oldest→newest
+2. Prep station routing (each item goes to the correct station)
+3. Device role: **Expediter** (sees whole order) vs **Prep Station** (sees only its items)
+4. **Bump / Fulfill** — whole ticket or single item
+5. **Show Recently Fulfilled** + **Unfulfill**
+6. **Recall** — re-open the most recently fulfilled ticket
+7. **All Day View** — aggregate count of each item still to make
+8. Device setup (assign role + stations)
 
-**POS**: QuickFireItemAdd · ModifierApplication · KdsTicketRouting · RapidCompVoid
-**Payment**: ContactlessTap · DrawerState
-**Inventory**: LongPress86ing · RestockReceive · RecipeDepletion · LogWasteSpoilage
-**Fleet**: GpsCheckIn · TimePunch · MidShiftDrop
-**Analytics**: ViewPmix · LaborVsSales · ShiftReview · LocationCompare · CloudReSync · LedgerExport · OfflineFallback
+## New database tables
+All under `public`, RLS on, `authenticated` grants, service_role full, scoped by `business_id` (matches existing tenancy pattern in `daily_prep_list`, `nano_bite_executions`).
 
-## Gap Analysis vs. Toast FOH Skills 101
+- `kds_stations` — id, business_id, name, sort_order, is_expediter (bool), active
+- `kds_devices` — id, business_id, device_id (text, matches provisioning), role ('expediter'|'prep'), station_ids uuid[], last_seen_at
+- `kds_tickets` — id, business_id, ticket_number (short human code), source ('pos'|'online'|'kiosk'), order_type, table_label, server_name, fired_at, status ('active'|'fulfilled'|'recalled'), fulfilled_at, recalled_at
+- `kds_ticket_items` — id, ticket_id fk cascade, business_id, menu_item_id nullable, name, quantity, modifiers jsonb, station_id fk kds_stations, course int, status ('pending'|'fulfilled'), fulfilled_at, sort_order
+- `menu_item_station_routes` (optional light table) — business_id, menu_item_id or menu_item_name, station_id — used server-side to compute `station_id` on ticket_items when firing
 
-| Toast Skill Area | Coverage | Missing |
-|---|---|---|
-| Start of Day | Partial | Passcode/PIN login screen · Opening cash count |
-| End of Day | Partial | Closing cash count · Declare cash tips |
-| Order Management | Partial | Hold/Send/Stay · Course assignment · Order pacing |
-| Table Management | **None** | Floor plan · Table timers · Seat assignment · Party size · Table transfer |
-| Payment Management | Partial | Split evenly · Split by item · Tip entry & close · Adjust payment · Cash tender · Refund |
-| Customer Management | **None** | Guest lookup · Loyalty scan · Guest notes/allergies · Email receipt |
-| Manage Self | Partial | Break punch (in/out) · View my sales & tips |
+Indexes: `(business_id, status, fired_at)` on tickets; `(ticket_id)`, `(business_id, station_id, status)` on items. Add both tables to `supabase_realtime` publication.
 
-## Proposed 18 New Pico-Bites (flat, standardized `PicoBiteProps`)
+## Server functions (`createServerFn` + `requireSupabaseAuth`)
+`src/lib/kds.functions.ts`:
+- `fireKdsTicket({ items, table_label, server_name, order_type, source })` — creates ticket + items, resolves station per item via `menu_item_station_routes` (fallback: default station).
+- `bumpItem({ item_id })`, `bumpTicket({ ticket_id })` — mark fulfilled; when all items fulfilled, mark ticket fulfilled.
+- `unfulfillItem({ item_id })`, `recallLastTicket({ station_id? })` — flip back to `active`, mark `recalled_at`.
+- `upsertKdsDevice({ device_id, role, station_ids })` (uses explicit INSERT-or-UPDATE per project rule — **no upsert**).
+- `listActiveTickets({ station_id? })` used only for SSR/first paint; live updates via Supabase realtime channel on the client.
 
-### `src/components/pico-bites/pos.tsx` (add 3)
-1. **HoldSendStay** — three-state action buttons; emits `{action:'hold'|'send'|'stay', ticketId}`.
-2. **CourseAssignment** — assign items to course 1/2/3/dessert; emits `{itemId, course}`.
-3. **OrderPacingTimer** — table-timer / ticket-age chip; long-press to bump.
+## UI Pico-Bites (`src/components/pico-bites/kds.tsx`)
+Reachable via new telemetry tags under `hosp.ft.kds.*`. All go through `TelemetryBus` and honor `shift-lock` where financial-ish.
 
-### `src/components/pico-bites/tables.tsx` (NEW file, 5 bites)
-4. **FloorPlan** — grid of tables with color-coded status (open/seated/paid).
-5. **TableTimer** — per-table elapsed time + threshold alert.
-6. **SeatAssignment** — order-by-seat selector (1–8).
-7. **PartySize** — numpad entry, drives seat grid.
-8. **TableTransfer** — pick source→destination table; manager PIN gate.
+- `KdsBoard` — grid of active tickets, oldest-left, per-item bump, "Bump All" per ticket. Subscribes to `kds_tickets`+`kds_ticket_items` realtime. Filter by device role/stations.
+- `KdsAllDayView` — collapses active items into `{name × qty}` totals (server-side aggregate query, refreshed on realtime).
+- `KdsRecentlyFulfilled` — last 20 fulfilled tickets in the last hour, with **Unfulfill**.
+- `KdsRecall` — one-tap recall of the most recent fulfilled ticket for this device's stations.
+- `KdsDeviceSetup` — pick role (Expediter/Prep) and stations; writes to `kds_devices` (INSERT-or-UPDATE, no upsert).
+- Rewrite existing `KdsTicketRouting` (POS side) to actually call `fireKdsTicket` with the current cart instead of a fake toast.
 
-### `src/components/pico-bites/payment.tsx` (add 5)
-9. **SplitEven** — party-size divisor; emits `{splitCount, perGuest}`.
-10. **SplitByItem** — line-item picker across N checks.
-11. **TipAndClose** — preset % chips + custom numpad; closes check.
-12. **AdjustPayment** — post-auth tip/amount adjust; manager gate on delta > threshold.
-13. **CashTender** — cash-received numpad; computes change due.
+Register all new tags in `src/components/pico-bites/registry.ts`.
 
-### `src/components/pico-bites/customer.tsx` (NEW file, 3 bites)
-14. **GuestLookup** — phone/email search against `customers` table; attaches to check.
-15. **LoyaltyScan** — QR/manual code entry; emits `{loyaltyId, points}`.
-16. **EmailReceipt** — capture guest email; queues receipt send.
+## Realtime
+Subscribe inside `useEffect` with cleanup (per project rule). One channel per KDS screen, filtered by `business_id` and (for prep) station list.
 
-### `src/components/pico-bites/self.tsx` (NEW file, 2 bites) + fleet additions
-17. **BreakPunch** — start/end break; PIN-gated; drives labor compliance.
-18. **MySalesAndTips** — read-only card: my checks, sales, tips-to-date this shift.
+## Out of scope for this pass
+- SMS alerts, kitchen productivity reports, multi-language, color-coded modifiers — flagged in Toast article but deferred; the schema leaves room (`modifiers jsonb`, timestamps) to add later.
+- Editing menu-item → station routes UI (seed via SQL/admin for now; the fire function tolerates missing routes by falling back to the default station).
 
-### Extend existing bites (no new files)
-- **DrawerState** → add `open_count` and `close_count` modes (opening/closing cash drawer counts) via a `mode` config prop.
-- **TimePunch** → already covers clock-in/out; BreakPunch handles breaks.
-- End-of-shift **DeclareCashTips** flow rolls into ShiftReview as an existing sub-step (add tip numpad to ShiftReview config, not a new bite).
-
-## Blueprint & Registry Wiring
-
-- Register 18 new `telemetryTag`s in `src/components/pico-bites/registry.ts`:
-  `ft.pos.hold_send_stay`, `ft.pos.course_assign`, `ft.pos.pacing`,
-  `ft.tbl.floor_plan`, `ft.tbl.timer`, `ft.tbl.seat`, `ft.tbl.party_size`, `ft.tbl.transfer`,
-  `ft.pay.split_even`, `ft.pay.split_item`, `ft.pay.tip_close`, `ft.pay.adjust`, `ft.pay.cash`,
-  `ft.cust.lookup`, `ft.cust.loyalty`, `ft.cust.email_receipt`,
-  `ft.self.break`, `ft.self.my_sales`.
-- Append the same 18 IDs to `bundlesByVertical.hospitality.food_truck` in the Supabase `device_provisioning_blueprints` blueprint (migration).
-- All bites emit through `TelemetryBus` → `nano_bite_executions` (flat ledger, no per-domain tables).
-
-## Screens (5-tab menu preserved)
-
-New bites slot into the existing 5 tabs — no new top-level tabs:
-- **POS**: +HoldSendStay, +CourseAssignment, +OrderPacingTimer, +Tables suite (5), +Customer suite (3)
-- **Payment**: +5 payment bites
-- **Fleet**: +BreakPunch, +MySalesAndTips
-- **Inventory / Analytics**: unchanged
-
-## Technical Details
-
-- Every new component conforms to `PicoBiteProps<TConfig, TPayload>` and calls `onAction` only.
-- Table Service state (open tables, timers, seats) is derived from `nano_bite_executions` via a lightweight selector in `src/lib/idia/telemetry-selectors.ts` (new file) — no new tables.
-- `GuestLookup` reads existing `profiles` (public directory, PII-free) plus a new `customers` table proposal deferred to a follow-up plan.
-- All manager-gated actions (TableTransfer, AdjustPayment > threshold, void) reuse `ManagerAuth` primitive (PIN + biometric).
-- Anti-scroll invariant preserved: each new bite fits the standard `PicoCard` footprint.
-
-## Out of Scope (call out to user)
-
-- **Reservations / Waitlist** — not in Toast FOH 101; defer.
-- **Kitchen Display printer routing** — hardware bridge, not FOH.
-- **Loyalty program backend** — LoyaltyScan emits the intent; backend integration is a separate plan.
-- **Customers table schema** — GuestLookup uses `profiles` for now; a dedicated `customers` table is a follow-up.
+## Deliverables
+1. Migration: 4 tables + realtime publication + default "Expediter" and "Kitchen" stations per business (via trigger on `businesses` insert, plus one-time backfill).
+2. `src/lib/kds.functions.ts` with the six server fns above.
+3. `src/components/pico-bites/kds.tsx` with 5 new bites + rewritten `KdsTicketRouting`.
+4. Registry updates.
+5. Removes any remaining mock/stub state from KDS path (honors the no-mock rule).
