@@ -4738,6 +4738,186 @@ export type Database = {
           },
         ]
       }
+      kds_devices: {
+        Row: {
+          business_id: string
+          created_at: string
+          device_id: string
+          id: string
+          last_seen_at: string | null
+          role: string
+          station_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          device_id: string
+          id?: string
+          last_seen_at?: string | null
+          role?: string
+          station_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          last_seen_at?: string | null
+          role?: string
+          station_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kds_stations: {
+        Row: {
+          active: boolean
+          business_id: string
+          created_at: string
+          id: string
+          is_expediter: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          business_id: string
+          created_at?: string
+          id?: string
+          is_expediter?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          business_id?: string
+          created_at?: string
+          id?: string
+          is_expediter?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kds_ticket_items: {
+        Row: {
+          business_id: string
+          course: number
+          created_at: string
+          fulfilled_at: string | null
+          id: string
+          menu_item_id: string | null
+          modifiers: Json
+          name: string
+          quantity: number
+          sort_order: number
+          station_id: string | null
+          status: string
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          course?: number
+          created_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          menu_item_id?: string | null
+          modifiers?: Json
+          name: string
+          quantity?: number
+          sort_order?: number
+          station_id?: string | null
+          status?: string
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          course?: number
+          created_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          menu_item_id?: string | null
+          modifiers?: Json
+          name?: string
+          quantity?: number
+          sort_order?: number
+          station_id?: string | null
+          status?: string
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_ticket_items_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "kds_stations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_ticket_items_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "kds_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_tickets: {
+        Row: {
+          business_id: string
+          created_at: string
+          fired_at: string
+          fulfilled_at: string | null
+          id: string
+          order_type: string | null
+          recalled_at: string | null
+          server_name: string | null
+          source: string
+          status: string
+          table_label: string | null
+          ticket_number: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          fired_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          order_type?: string | null
+          recalled_at?: string | null
+          server_name?: string | null
+          source?: string
+          status?: string
+          table_label?: string | null
+          ticket_number: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          fired_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          order_type?: string | null
+          recalled_at?: string | null
+          server_name?: string | null
+          source?: string
+          status?: string
+          table_label?: string | null
+          ticket_number?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       legal_agreements: {
         Row: {
           agreed_at: string | null
@@ -5268,6 +5448,41 @@ export type Database = {
           note?: string | null
         }
         Relationships: []
+      }
+      menu_item_station_routes: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          menu_item_id: string | null
+          menu_item_name: string | null
+          station_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          menu_item_id?: string | null
+          menu_item_name?: string | null
+          station_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          menu_item_id?: string | null
+          menu_item_name?: string | null
+          station_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_station_routes_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "kds_stations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       menu_items: {
         Row: {
