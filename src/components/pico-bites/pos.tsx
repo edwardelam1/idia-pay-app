@@ -280,10 +280,10 @@ export function OrderPacingTimer({
     { id: "T-1002", startedAt: Date.now() - 340_000 },
   ];
   const [now, setNow] = useState(Date.now());
-  useState(() => {
+  useEffect(() => {
     const i = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(i);
-  });
+  }, []);
   return (
     <PicoCard title="Order Pacing" subtitle="Long-press to bump">
       <div className="flex flex-col gap-2">
