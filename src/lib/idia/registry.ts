@@ -13,6 +13,8 @@ export type NanoBiteSpec = {
   valueChainStage?: string;
   cadence?: string;
   requiresTier?: string;
+  /** Optional per-bite config schema from the Hub blueprint. */
+  config?: Record<string, unknown>;
 };
 
 export type SubModule = {
@@ -62,6 +64,7 @@ function normalizeBundle(bundle: Record<string, unknown>, idx: number): SubModul
     valueChainStage: nb.valueChainStage as string | undefined,
     cadence: nb.cadence as string | undefined,
     requiresTier: nb.requiresTier as string | undefined,
+    config: (nb.config as Record<string, unknown>) ?? undefined,
   }));
   return {
     id: slugify(`${vertical}-${name}`),
