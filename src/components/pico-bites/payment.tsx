@@ -2,8 +2,9 @@
  * Payment Pico-Bites.
  */
 import { useState } from "react";
+import { toast } from "sonner";
 import type { PicoBiteProps } from "@/lib/idia/pico-bite";
-import { ActionButton, PicoCard, Numpad } from "./primitives";
+import { ActionButton, PicoCard, Numpad, ManagerAuth } from "./primitives";
 
 // ---------- 3.1 Contactless Tap (NFC) ------------------------------------
 export function ContactlessTap({
