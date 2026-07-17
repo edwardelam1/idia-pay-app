@@ -13,6 +13,8 @@ export type NanoBiteSpec = {
   valueChainStage?: string;
   cadence?: string;
   requiresTier?: string;
+  /** Optional per-bite config schema from the Hub blueprint. */
+  config?: Record<string, unknown>;
 };
 
 export type SubModule = {
