@@ -19,6 +19,13 @@ import {
   ReprintChit,
 } from "./pos";
 import {
+  KdsBoard,
+  KdsAllDayView,
+  KdsRecall,
+  KdsDeviceSetup,
+  KdsFireTicket,
+} from "./kds";
+import {
   LongPress86ing,
   RecipeDepletion,
   LogWasteSpoilage,
