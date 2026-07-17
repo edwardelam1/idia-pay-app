@@ -208,11 +208,6 @@ export const PICO_BITE_REGISTRY: Record<string, PicoBiteEntry> = {
     gate: "none",
     defaultConfig: {},
   },
-  "hosp.ft.rpt.export_ledger": {
-    component: LedgerExport,
-    gate: "none",
-    defaultConfig: {},
-  },
 
   // POS · extended order management
   "hosp.ft.pos.hold_send_stay": {
