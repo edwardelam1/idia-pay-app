@@ -19,6 +19,13 @@ import {
   ReprintChit,
 } from "./pos";
 import {
+  KdsBoard,
+  KdsAllDayView,
+  KdsRecall,
+  KdsDeviceSetup,
+  KdsFireTicket,
+} from "./kds";
+import {
   LongPress86ing,
   RecipeDepletion,
   LogWasteSpoilage,
@@ -107,9 +114,9 @@ export const PICO_BITE_REGISTRY: Record<string, PicoBiteEntry> = {
     },
   },
   "hosp.ft.pos.kds_fire": {
-    component: KdsTicketRouting,
+    component: KdsFireTicket,
     gate: "shift-lock",
-    defaultConfig: { station: "Grill" },
+    defaultConfig: { cart: [] },
   },
   "hosp.ft.pos.void_comp": {
     component: RapidCompVoid,
@@ -367,6 +374,11 @@ export const PICO_BITE_REGISTRY: Record<string, PicoBiteEntry> = {
   // Self · handoff + announcements
   "hosp.ft.self.handoff": { component: TableHandoff, gate: "shift-lock", defaultConfig: {} },
   "hosp.ft.self.broadcast": { component: EmployeeBroadcast, gate: "none", defaultConfig: {} },
+  // KDS · Kitchen Display System
+  "hosp.ft.kds.board": { component: KdsBoard, gate: "none", defaultConfig: {} },
+  "hosp.ft.kds.all_day": { component: KdsAllDayView, gate: "none", defaultConfig: {} },
+  "hosp.ft.kds.recall": { component: KdsRecall, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.kds.device_setup": { component: KdsDeviceSetup, gate: "none", defaultConfig: {} },
 };
 
 export function getPicoBite(tag: string): PicoBiteEntry | null {
