@@ -447,43 +447,53 @@ function NanoBiteRenderer({
   carton: VerticalCarton;
   subModule: SubModule;
 }): ReactNode {
-  console.log(`[BEGIN] NanoBiteRenderer execution for spec.id: ${spec.id}`);
-  let Component = null;
+  const tenantId = (carton.raw as { business_id?: string } | undefined)?.business_id ?? null;
 
-  try {
-    const expectedFileName = ATOM_FILE_MAP[spec.id];
-    
-    if (expectedFileName) {
-      console.log(`[INFO] NanoBiteRenderer: Registry mapped ${spec.id} to filename ${expectedFileName}.tsx. Scanning glob...`);
-      
-      const match = Object.entries(rawAtoms).find(([path]) => path.endsWith(`/${expectedFileName}.tsx`));
-      
-      if (match) {
-        console.log(`[INFO] NanoBiteRenderer: Physical atom located at ${match[0]}`);
-        Component = (match[1] as any).default;
-      } else {
-        console.warn(`[WARN] NanoBiteRenderer: File ${expectedFileName}.tsx mapped, but not found in src/components/nanobites/. Proceeding with Dynamic fallback.`);
-      }
-    } else {
-      console.log(`[INFO] NanoBiteRenderer: No hard mapping found for ${spec.id}. Proceeding with Dynamic fallback.`);
-    }
-  } catch (err: any) {
-    console.error(`[ERROR] NanoBiteRenderer physical mapping failed:`, err.message);
-  } finally {
-    console.log(`[END] NanoBiteRenderer atom resolution phase for spec.id: ${spec.id}`);
+  // 1) FLAT PICO-BITE REGISTRY — primary dispatcher.
+  const entry = getPicoBite(spec.id);
+  if (entry) {
+    return (
+      <SovereignWrapper id={spec.id}>
+        <ActiveBusinessProvider
+          businessId={tenantId}
+          provisioningCode={carton.provisioningCode}
+        >
+          <PicoBiteHost
+            spec={spec}
+            carton={carton}
+            subModule={subModule}
+            entry={entry}
+            businessId={tenantId}
+          />
+        </ActiveBusinessProvider>
+      </SovereignWrapper>
+    );
+  }
+
+  // 2) LEGACY ATOM MAP — for pre-pivot bites (non-Pico components).
+  let Component: React.ComponentType<{ businessId?: string }> | null = null;
+  const expectedFileName = ATOM_FILE_MAP[spec.id];
+  if (expectedFileName) {
+    const match = Object.entries(rawAtoms).find(([path]) =>
+      path.endsWith(`/${expectedFileName}.tsx`),
+    );
+    if (match) Component = (match[1] as { default: React.ComponentType<{ businessId?: string }> }).default;
   }
 
   if (Component) {
-    const tenantId = (carton.raw as any)?.business_id ?? null;
     return (
       <SovereignWrapper id={spec.id}>
-        <ActiveBusinessProvider businessId={tenantId} provisioningCode={carton.provisioningCode}>
+        <ActiveBusinessProvider
+          businessId={tenantId}
+          provisioningCode={carton.provisioningCode}
+        >
           <Component businessId={tenantId ?? undefined} />
         </ActiveBusinessProvider>
       </SovereignWrapper>
     );
   }
 
+  // 3) DYNAMIC FALLBACK — unrecognized bites.
   return (
     <DynamicNanoBite
       spec={spec}
@@ -492,6 +502,68 @@ function NanoBiteRenderer({
       cartonCode={carton.provisioningCode}
     />
   );
+}
+
+// Host wires the standardized Pico-Bite contract to LiquidOS state:
+// gate policy → gateSatisfied/gateReason; onAction → TelemetryBus.
+function PicoBiteHost({
+  spec,
+  carton,
+  subModule,
+  entry,
+  businessId,
+}: {
+  spec: NanoBiteSpec;
+  carton: VerticalCarton;
+  subModule: SubModule;
+  entry: NonNullable<ReturnType<typeof getPicoBite>>;
+  businessId: string | null;
+}) {
+  const shift = useShiftLock();
+  const gate = resolveGate(entry.gate, shift);
+  const Component = entry.component;
+  const config = { ...entry.defaultConfig, ...(spec.config ?? {}) };
+
+  return (
+    <Component
+      telemetryTag={spec.id}
+      config={config}
+      gateSatisfied={gate.satisfied}
+      gateReason={gate.reason}
+      onAction={(payload: unknown) => {
+        TelemetryBus.emit({
+          telemetryTag: spec.id,
+          picoBite: Component.displayName ?? Component.name ?? spec.id,
+          cartonCode: carton.provisioningCode,
+          businessId,
+          screen: spec.screen,
+          subModuleId: subModule.id,
+          nanoBiteId: spec.id,
+          payload,
+        });
+      }}
+    />
+  );
+}
+
+function resolveGate(
+  policy: GatePolicy,
+  shift: ReturnType<typeof useShiftLock>,
+): { satisfied: boolean; reason?: string } {
+  if (policy === "none") return { satisfied: true };
+  if (policy === "shift-lock") {
+    if (shift.ready) return { satisfied: true };
+    if (shift.drifted)
+      return {
+        satisfied: false,
+        reason: `Location drift · ${Math.round(shift.driftMeters)}m from lock.`,
+      };
+    return {
+      satisfied: false,
+      reason: "Complete GPS Check-In and Time Punch to unlock.",
+    };
+  }
+  return { satisfied: true };
 }
 
 function isPaymentSpec(spec: NanoBiteSpec): boolean {
