@@ -135,7 +135,7 @@ export function KdsTicketRouting({
 }
 
 // ---------- 1.4 Rapid Comp/Void (long-press for void) --------------------
-import { LongPressButton, Numpad, ManagerAuth } from "./primitives";
+
 
 export function RapidCompVoid({
   onAction,
