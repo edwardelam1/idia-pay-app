@@ -1,150 +1,90 @@
-## Goal
+# FOH Coverage Audit — Toast Skills 101 vs. Current Pico-Bites
 
-Convert the 20 Food Truck Pico-Bites from vertical-siloed, self-contained components into a flat, config-driven, blueprint-rendered library. LiquidOS becomes the render engine; Pico-Bites become dumb terminals; all events flow through one TelemetryBus.
+## Current 20 Pico-Bites (already shipped)
 
-## 1. Flatten the directory
+**POS**: QuickFireItemAdd · ModifierApplication · KdsTicketRouting · RapidCompVoid
+**Payment**: ContactlessTap · DrawerState
+**Inventory**: LongPress86ing · RestockReceive · RecipeDepletion · LogWasteSpoilage
+**Fleet**: GpsCheckIn · TimePunch · MidShiftDrop
+**Analytics**: ViewPmix · LaborVsSales · ShiftReview · LocationCompare · CloudReSync · LedgerExport · OfflineFallback
 
-Move + rename (git mv, keep git history where possible):
+## Gap Analysis vs. Toast FOH Skills 101
 
-```text
-src/components/nanobites/hospitality/foodtruck/*  →  src/components/pico-bites/*
-```
+| Toast Skill Area | Coverage | Missing |
+|---|---|---|
+| Start of Day | Partial | Passcode/PIN login screen · Opening cash count |
+| End of Day | Partial | Closing cash count · Declare cash tips |
+| Order Management | Partial | Hold/Send/Stay · Course assignment · Order pacing |
+| Table Management | **None** | Floor plan · Table timers · Seat assignment · Party size · Table transfer |
+| Payment Management | Partial | Split evenly · Split by item · Tip entry & close · Adjust payment · Cash tender · Refund |
+| Customer Management | **None** | Guest lookup · Loyalty scan · Guest notes/allergies · Email receipt |
+| Manage Self | Partial | Break punch (in/out) · View my sales & tips |
 
-Function-based renames (the three you named + the rest, following the same rule — describe input mechanic, not vertical):
+## Proposed 18 New Pico-Bites (flat, standardized `PicoBiteProps`)
 
-| Old (foodtruck)          | New (pico-bites)              | Mechanic                          |
-|--------------------------|-------------------------------|-----------------------------------|
-| QuickFireItemAdd         | DynamicGridPicoBite           | tap grid of configurable buttons  |
-| TimePunch                | NumpadAuthPicoBite            | PIN numpad + status toggle        |
-| GpsCheckIn               | LocationLockPicoBite          | geo-lock w/ drift monitor         |
-| ContactlessTap           | ContactlessTapPicoBite        | NFC/tap intake                    |
-| ModifierApplication      | ModifierChipsPicoBite         | multi-select chip group           |
-| RapidCompVoid            | ManagerApprovedActionPicoBite | manager auth + amount             |
-| KdsTicketRouting         | RouteToStationPicoBite        | dispatch to endpoint(s)           |
-| RecipeDepletion          | AutoDeductPicoBite             | reactive counter, event-driven    |
-| LogWasteSpoilage         | LoggedReasonPicoBite          | reason picker + qty + note        |
-| RestockReceive           | ScanReceivePicoBite           | scan/manual receive               |
-| DrawerState              | ManagerCountPicoBite          | manager auth + count entry        |
-| MidShiftDrop             | ManagerCashDropPicoBite       | manager auth + currency           |
-| LongPress86ing           | LongPressToggleGridPicoBite   | long-press toggle over grid       |
-| CloudReSync              | SyncQueuePicoBite             | queue drain + retry               |
-| OfflineFallback          | OfflineBannerPicoBite         | connectivity indicator            |
-| LedgerExport             | BatchExportPicoBite           | batch confirm + export            |
-| LaborVsSales             | DualSeriesChartPicoBite       | two-series chart + range picker   |
-| LocationCompare          | HistoricalCompareChartPicoBite| dropdown + range + chart          |
-| ShiftReview              | SummaryPanelPicoBite          | tallied summary + confirm         |
-| ViewPmix                 | RankedListPicoBite            | ranked list w/ sort               |
+### `src/components/pico-bites/pos.tsx` (add 3)
+1. **HoldSendStay** — three-state action buttons; emits `{action:'hold'|'send'|'stay', ticketId}`.
+2. **CourseAssignment** — assign items to course 1/2/3/dessert; emits `{itemId, course}`.
+3. **OrderPacingTimer** — table-timer / ticket-age chip; long-press to bump.
 
-## 2. Standardized props
+### `src/components/pico-bites/tables.tsx` (NEW file, 5 bites)
+4. **FloorPlan** — grid of tables with color-coded status (open/seated/paid).
+5. **TableTimer** — per-table elapsed time + threshold alert.
+6. **SeatAssignment** — order-by-seat selector (1–8).
+7. **PartySize** — numpad entry, drives seat grid.
+8. **TableTransfer** — pick source→destination table; manager PIN gate.
 
-Every Pico-Bite conforms to:
+### `src/components/pico-bites/payment.tsx` (add 5)
+9. **SplitEven** — party-size divisor; emits `{splitCount, perGuest}`.
+10. **SplitByItem** — line-item picker across N checks.
+11. **TipAndClose** — preset % chips + custom numpad; closes check.
+12. **AdjustPayment** — post-auth tip/amount adjust; manager gate on delta > threshold.
+13. **CashTender** — cash-received numpad; computes change due.
 
-```ts
-// src/lib/idia/pico-bite.ts
-export interface PicoBiteProps<TConfig = Record<string, unknown>, TPayload = unknown> {
-  telemetryTag: string;                         // e.g. "ft.pos.item_add"
-  config: TConfig;                              // schema-defined labels/colors/limits/etc.
-  onAction: (payload: TPayload) => void;        // fires up to LiquidOS
-}
-```
+### `src/components/pico-bites/customer.tsx` (NEW file, 3 bites)
+14. **GuestLookup** — phone/email search against `customers` table; attaches to check.
+15. **LoyaltyScan** — QR/manual code entry; emits `{loyaltyId, points}`.
+16. **EmailReceipt** — capture guest email; queues receipt send.
 
-Rules baked into every Pico-Bite:
-- No `useCartonCode`, no `recordExecution`, no `supabase` import, no localStorage writes for cross-bite state.
-- No hardcoded copy — labels, button text, min/max, currency symbol, grid items, station endpoints, reason codes, chart series names all come from `config`.
-- Shift-lock, drift, and clock state that USED to live inside individual bites is removed from the bite; the OS decides whether to render/disable a bite via blueprint config (`disabledWhen`) — see §3.
-- Manager auth stays inside `ManagerApprovedActionPicoBite` / `ManagerCountPicoBite` / `ManagerCashDropPicoBite` because it's an input mechanic, but the PIN/biometric result is emitted through `onAction` — never persisted by the bite.
+### `src/components/pico-bites/self.tsx` (NEW file, 2 bites) + fleet additions
+17. **BreakPunch** — start/end break; PIN-gated; drives labor compliance.
+18. **MySalesAndTips** — read-only card: my checks, sales, tips-to-date this shift.
 
-## 3. LiquidOS becomes the render engine
+### Extend existing bites (no new files)
+- **DrawerState** → add `open_count` and `close_count` modes (opening/closing cash drawer counts) via a `mode` config prop.
+- **TimePunch** → already covers clock-in/out; BreakPunch handles breaks.
+- End-of-shift **DeclareCashTips** flow rolls into ShiftReview as an existing sub-step (add tip numpad to ShiftReview config, not a new bite).
 
-New rendering pipeline in `src/lib/idia/LiquidOS.tsx`:
+## Blueprint & Registry Wiring
 
-1. Read `PayAppBlueprint` from `ProvisioningEngine.hydrateFromHub`.
-2. For each active Nano-Bite, read its `layout` from the blueprint. Layout schema:
+- Register 18 new `telemetryTag`s in `src/components/pico-bites/registry.ts`:
+  `ft.pos.hold_send_stay`, `ft.pos.course_assign`, `ft.pos.pacing`,
+  `ft.tbl.floor_plan`, `ft.tbl.timer`, `ft.tbl.seat`, `ft.tbl.party_size`, `ft.tbl.transfer`,
+  `ft.pay.split_even`, `ft.pay.split_item`, `ft.pay.tip_close`, `ft.pay.adjust`, `ft.pay.cash`,
+  `ft.cust.lookup`, `ft.cust.loyalty`, `ft.cust.email_receipt`,
+  `ft.self.break`, `ft.self.my_sales`.
+- Append the same 18 IDs to `bundlesByVertical.hospitality.food_truck` in the Supabase `device_provisioning_blueprints` blueprint (migration).
+- All bites emit through `TelemetryBus` → `nano_bite_executions` (flat ledger, no per-domain tables).
 
-    ```jsonc
-    {
-      "layout": {
-        "kind": "columns" | "stack" | "grid",
-        "regions": [
-          {
-            "id": "left",
-            "picoBite": "DynamicGridPicoBite",
-            "telemetryTag": "ft.pos.item_add",
-            "config": { "items": [...], "gate": "shiftReady" }
-          },
-          {
-            "id": "right",
-            "picoBite": "NumpadAuthPicoBite",
-            "telemetryTag": "ft.fleet.time_punch",
-            "config": { "maxLength": 6, "toggleLabel": ["Clock In","Clock Out"] }
-          }
-        ]
-      }
-    }
-    ```
+## Screens (5-tab menu preserved)
 
-3. A registry maps string → component:
+New bites slot into the existing 5 tabs — no new top-level tabs:
+- **POS**: +HoldSendStay, +CourseAssignment, +OrderPacingTimer, +Tables suite (5), +Customer suite (3)
+- **Payment**: +5 payment bites
+- **Fleet**: +BreakPunch, +MySalesAndTips
+- **Inventory / Analytics**: unchanged
 
-    ```ts
-    // src/components/pico-bites/registry.ts
-    export const PICO_BITE_REGISTRY = {
-      DynamicGridPicoBite,
-      NumpadAuthPicoBite,
-      LocationLockPicoBite,
-      // …all 20
-    } as const;
-    export type PicoBiteName = keyof typeof PICO_BITE_REGISTRY;
-    ```
+## Technical Details
 
-4. LiquidOS renders each region by name, injects `telemetryTag` + `config`, and hands every bite the same `onAction` bound to the TelemetryBus.
-5. Cross-bite gates (shift-ready, drift, offline) live at the OS level. Blueprint says `"gate": "shiftReady"` on a region → LiquidOS wraps that region with a disabled/overlay state driven by `useShiftLock()`. The bite itself stays dumb.
-6. Existing `src/lib/idia/registry.ts` normalization stays — but LiquidOS now consumes `layout` off each sub-module instead of a hardcoded per-vertical `Screen*` component.
+- Every new component conforms to `PicoBiteProps<TConfig, TPayload>` and calls `onAction` only.
+- Table Service state (open tables, timers, seats) is derived from `nano_bite_executions` via a lightweight selector in `src/lib/idia/telemetry-selectors.ts` (new file) — no new tables.
+- `GuestLookup` reads existing `profiles` (public directory, PII-free) plus a new `customers` table proposal deferred to a follow-up plan.
+- All manager-gated actions (TableTransfer, AdjustPayment > threshold, void) reuse `ManagerAuth` primitive (PIN + biometric).
+- Anti-scroll invariant preserved: each new bite fits the standard `PicoCard` footprint.
 
-## 4. Central Telemetry Bus
+## Out of Scope (call out to user)
 
-New module `src/lib/idia/telemetry-bus.ts`:
-
-```ts
-type BusEvent = {
-  telemetryTag: string;
-  picoBite: PicoBiteName;
-  cartonCode: string;      // injected by OS
-  businessId: string;      // injected by OS
-  screen: string;          // from blueprint
-  payload: unknown;
-  ts: string;
-};
-
-class TelemetryBus {
-  emit(evt: Omit<BusEvent, "ts">): void   // enqueue in-memory + IndexedDB
-  flush(): Promise<void>                   // batch POST to edge node
-  subscribe(fn: (evt: BusEvent) => void)   // for reactive gates
-}
-```
-
-- Bites call `onAction(payload)` → LiquidOS attaches `cartonCode`, `businessId`, `screen`, `telemetryTag`, `picoBite`, timestamp → `TelemetryBus.emit`.
-- Bus queues events, batches to `nano_bite_executions` (existing flat table) via existing `recordExecution` helper, keeps offline queue for retry.
-- `recordExecution` in `src/lib/idia/executions.ts` gets a single new caller (the Bus). All 20 old callsites inside bites are deleted.
-- Reactive triggers (RouteToStationPicoBite firing → AutoDeductPicoBite reacting) go through `TelemetryBus.subscribe`, not shared localStorage.
-
-## 5. Cleanup / breaking changes
-
-- Delete `src/components/nanobites/hospitality/foodtruck/` after moves land.
-- `src/components/foodtruck-inputs/shared.tsx` splits: input primitives (ActionButton, Numpad, QuantityStepper, LongPressButton, PicoCard, ManagerAuth) → `src/components/pico-bites/primitives.tsx`; shift-lock hooks → `src/lib/idia/gates.ts` (OS-only, no bite imports it).
-- `SUBMODULE_ID` / `useCartonCode` disappear from bite files entirely.
-- Any Hub blueprint that lacks a `layout` block: OS falls back to auto-stack rendering of every Pico-Bite name found on the sub-module (so existing IDIA-FRWD-NEUL / IDIA-IJKX-ET0U hydrate without a Hub-side change on day 1).
-
-## 6. Order of work
-
-1. Create `PicoBiteProps` type + registry + TelemetryBus (no behavior wired).
-2. Move primitives into `src/components/pico-bites/primitives.tsx`; extract gates.
-3. Port bites one micro-element group at a time (POS → Payments → Inventory → Fleet → Analytics), each becoming stateless + prop-driven, in parallel writes per group.
-4. Rewrite `LiquidOS.tsx` renderer to consume `layout` + registry.
-5. Wire TelemetryBus → `recordExecution` (single writer).
-6. Delete legacy foodtruck folder + dead imports; typecheck; smoke-test with a hand-crafted `layout` payload against IDIA-FRWD-NEUL.
-
-## Out of scope
-
-- Hub-side blueprint schema authoring for `layout` (this plan only makes Pay tolerant of it; Hub can start emitting `layout` after Pay ships).
-- New Pico-Bite types beyond the existing 20.
-- Server-side batching endpoint for TelemetryBus (still writes to `nano_bite_executions` for now).
+- **Reservations / Waitlist** — not in Toast FOH 101; defer.
+- **Kitchen Display printer routing** — hardware bridge, not FOH.
+- **Loyalty program backend** — LoyaltyScan emits the intent; backend integration is a separate plan.
+- **Customers table schema** — GuestLookup uses `profiles` for now; a dedicated `customers` table is a follow-up.

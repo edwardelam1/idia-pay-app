@@ -3,7 +3,7 @@
  * Each component receives `{ telemetryTag, config, onAction, gateSatisfied }`
  * and emits user intent through `onAction`. No storage, no side effects.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { PicoBiteProps } from "@/lib/idia/pico-bite";
 import { ActionButton, PicoCard, LongPressButton, Numpad, ManagerAuth } from "./primitives";
@@ -177,6 +177,135 @@ export function RapidCompVoid({
           setNeedAuth(null);
         }}
       />
+    </PicoCard>
+  );
+}
+
+// ---------- 1.5 Hold / Send / Stay ---------------------------------------
+export function HoldSendStay({
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<{ ticketId?: string | number }, { action: "hold" | "send" | "stay"; ticketId?: string | number }>) {
+  const [last, setLast] = useState<"hold" | "send" | "stay" | null>(null);
+  const emit = (action: "hold" | "send" | "stay", ticketId?: string | number) => {
+    setLast(action);
+    onAction({ action, ticketId });
+  };
+  return (
+    <PicoCard title="Hold / Send / Stay" subtitle="Kitchen pacing">
+      <div className="grid grid-cols-3 gap-2">
+        <ActionButton variant="warning" disabled={!gateSatisfied} onClick={() => emit("hold")}>
+          Hold
+        </ActionButton>
+        <ActionButton disabled={!gateSatisfied} onClick={() => emit("send")}>
+          Send
+        </ActionButton>
+        <ActionButton variant="ghost" disabled={!gateSatisfied} onClick={() => emit("stay")}>
+          Stay
+        </ActionButton>
+      </div>
+      {last && (
+        <p className="text-[11px] text-muted-foreground">
+          Last: <span className="font-semibold uppercase">{last}</span>
+        </p>
+      )}
+    </PicoCard>
+  );
+}
+
+// ---------- 1.6 Course Assignment ----------------------------------------
+type Course = { id: string; label: string };
+export function CourseAssignment({
+  config,
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<{ items?: { id: string; label: string }[]; courses?: Course[] }, { itemId: string; course: string }>) {
+  const items = config.items ?? [
+    { id: "sku.app", label: "Appetizer" },
+    { id: "sku.entree", label: "Entree" },
+    { id: "sku.dessert", label: "Dessert" },
+  ];
+  const courses: Course[] = config.courses ?? [
+    { id: "1", label: "Course 1" },
+    { id: "2", label: "Course 2" },
+    { id: "3", label: "Course 3" },
+    { id: "dessert", label: "Dessert" },
+  ];
+  const [selected, setSelected] = useState<string | null>(null);
+  const assign = (course: string) => {
+    if (!selected) return toast.error("Pick an item first");
+    onAction({ itemId: selected, course });
+    toast.success(`${selected} → ${course}`);
+  };
+  return (
+    <PicoCard title="Course Assignment" subtitle="Pace multi-course tickets">
+      <div className="grid grid-cols-2 gap-2">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            disabled={!gateSatisfied}
+            onClick={() => setSelected(it.id)}
+            className={`min-h-[44px] rounded-xl text-[13px] font-semibold ${
+              selected === it.id ? "bg-primary text-primary-foreground" : "bg-secondary"
+            }`}
+          >
+            {it.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 border-t pt-2">
+        {courses.map((c) => (
+          <ActionButton
+            key={c.id}
+            variant="ghost"
+            disabled={!gateSatisfied || !selected}
+            onClick={() => assign(c.id)}
+          >
+            {c.label}
+          </ActionButton>
+        ))}
+      </div>
+    </PicoCard>
+  );
+}
+
+// ---------- 1.7 Order Pacing Timer ---------------------------------------
+export function OrderPacingTimer({
+  config,
+  onAction,
+}: PicoBiteProps<{ tickets?: { id: string; startedAt: number }[]; thresholdSec?: number }, { ticketId: string; bumped: true }>) {
+  const threshold = config.thresholdSec ?? 300;
+  const tickets = config.tickets ?? [
+    { id: "T-1001", startedAt: Date.now() - 120_000 },
+    { id: "T-1002", startedAt: Date.now() - 340_000 },
+  ];
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, []);
+  return (
+    <PicoCard title="Order Pacing" subtitle="Long-press to bump">
+      <div className="flex flex-col gap-2">
+        {tickets.map((t) => {
+          const age = Math.floor((now - t.startedAt) / 1000);
+          const late = age > threshold;
+          return (
+            <LongPressButton
+              key={t.id}
+              onLongPress={() => onAction({ ticketId: t.id, bumped: true })}
+              className={`min-h-[44px] rounded-xl px-3 flex items-center justify-between ${
+                late ? "bg-destructive text-destructive-foreground" : "bg-secondary"
+              }`}
+            >
+              <span className="font-semibold">{t.id}</span>
+              <span className="tabular-nums text-[12px]">
+                {Math.floor(age / 60)}:{String(age % 60).padStart(2, "0")}
+              </span>
+            </LongPressButton>
+          );
+        })}
+      </div>
     </PicoCard>
   );
 }

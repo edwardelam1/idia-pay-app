@@ -11,6 +11,9 @@ import {
   ModifierApplication,
   KdsTicketRouting,
   RapidCompVoid,
+  HoldSendStay,
+  CourseAssignment,
+  OrderPacingTimer,
 } from "./pos";
 import {
   LongPress86ing,
@@ -23,6 +26,11 @@ import {
   OfflineFallback,
   CloudReSync,
   DrawerState,
+  SplitEven,
+  SplitByItem,
+  TipAndClose,
+  AdjustPayment,
+  CashTender,
 } from "./payment";
 import { GpsCheckIn, TimePunch, MidShiftDrop, ShiftReview } from "./fleet";
 import {
@@ -31,6 +39,15 @@ import {
   LocationCompare,
   LedgerExport,
 } from "./analytics";
+import {
+  FloorPlan,
+  TableTimer,
+  SeatAssignment,
+  PartySize,
+  TableTransfer,
+} from "./tables";
+import { GuestLookup, LoyaltyScan, EmailReceipt } from "./customer";
+import { BreakPunch, MySalesAndTips } from "./self";
 
 export type GatePolicy = "none" | "shift-lock";
 
@@ -188,6 +205,116 @@ export const PICO_BITE_REGISTRY: Record<string, PicoBiteEntry> = {
   },
   "hosp.ft.rpt.export_ledger": {
     component: LedgerExport,
+    gate: "none",
+    defaultConfig: {},
+  },
+
+  // POS · extended order management
+  "hosp.ft.pos.hold_send_stay": {
+    component: HoldSendStay,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+  "hosp.ft.pos.course_assign": {
+    component: CourseAssignment,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+  "hosp.ft.pos.order_pace": {
+    component: OrderPacingTimer,
+    gate: "shift-lock",
+    defaultConfig: { thresholdSec: 300 },
+  },
+
+  // Tables
+  "hosp.ft.tbl.floor_plan": {
+    component: FloorPlan,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+  "hosp.ft.tbl.timer": {
+    component: TableTimer,
+    gate: "shift-lock",
+    defaultConfig: { thresholdSec: 1800 },
+  },
+  "hosp.ft.tbl.seat_assign": {
+    component: SeatAssignment,
+    gate: "shift-lock",
+    defaultConfig: { partySize: 4 },
+  },
+  "hosp.ft.tbl.party_size": {
+    component: PartySize,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+  "hosp.ft.tbl.transfer": {
+    component: TableTransfer,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+
+  // Payment · check splitting & tender
+  "hosp.ft.pay.split_even": {
+    component: SplitEven,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+  "hosp.ft.pay.split_item": {
+    component: SplitByItem,
+    gate: "shift-lock",
+    defaultConfig: { checkCount: 2 },
+  },
+  "hosp.ft.pay.tip_close": {
+    component: TipAndClose,
+    gate: "shift-lock",
+    defaultConfig: { presets: [0.15, 0.18, 0.2, 0.25] },
+  },
+  "hosp.ft.pay.adjust": {
+    component: AdjustPayment,
+    gate: "shift-lock",
+    defaultConfig: { threshold: 5 },
+  },
+  "hosp.ft.pay.cash_tender": {
+    component: CashTender,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+  "hosp.ft.pay.drawer_count_open": {
+    component: DrawerState,
+    gate: "none",
+    defaultConfig: { mode: "open_count" },
+  },
+  "hosp.ft.pay.drawer_count_close": {
+    component: DrawerState,
+    gate: "shift-lock",
+    defaultConfig: { mode: "close_count" },
+  },
+
+  // Customer
+  "hosp.ft.cust.lookup": {
+    component: GuestLookup,
+    gate: "none",
+    defaultConfig: {},
+  },
+  "hosp.ft.cust.loyalty": {
+    component: LoyaltyScan,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+  "hosp.ft.cust.email_receipt": {
+    component: EmailReceipt,
+    gate: "shift-lock",
+    defaultConfig: {},
+  },
+
+  // Self
+  "hosp.ft.self.break": {
+    component: BreakPunch,
+    gate: "none",
+    defaultConfig: {},
+  },
+  "hosp.ft.self.sales_tips": {
+    component: MySalesAndTips,
     gate: "none",
     defaultConfig: {},
   },
