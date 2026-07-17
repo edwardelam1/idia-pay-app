@@ -395,3 +395,276 @@ export function CashTender({
     </PicoCard>
   );
 }
+
+// ---------- 3.10 Refund --------------------------------------------------
+const REFUND_REASONS = ["Guest request", "Order error", "Quality issue", "Other"] as const;
+export function Refund({
+  config,
+  onAction,
+}: PicoBiteProps<{ originalAmount?: number }, { amount: number; reason: string; managerAuthed: true }>) {
+  const original = config.originalAmount ?? 0;
+  const [pad, setPad] = useState(false);
+  const [amount, setAmount] = useState<number | null>(null);
+  const [reason, setReason] = useState<string | null>(null);
+  const [auth, setAuth] = useState(false);
+  return (
+    <PicoCard title="Refund" subtitle={`Original $${original.toFixed(2)} · manager PIN`}>
+      <ActionButton variant="warning" onClick={() => setPad(true)}>
+        {amount != null ? `Amount $${amount.toFixed(2)}` : "Enter Refund Amount"}
+      </ActionButton>
+      <div className="grid grid-cols-2 gap-1">
+        {REFUND_REASONS.map((r) => (
+          <button
+            key={r}
+            onClick={() => setReason(r)}
+            className={`p-2 rounded-lg text-[12px] font-semibold ${
+              reason === r ? "bg-primary text-primary-foreground" : "bg-secondary"
+            }`}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+      <ActionButton
+        variant="danger"
+        disabled={amount == null || amount <= 0 || !reason}
+        onClick={() => setAuth(true)}
+      >
+        Approve Refund
+      </ActionButton>
+      <Numpad
+        open={pad}
+        title="Refund amount"
+        mode="currency"
+        onCancel={() => setPad(false)}
+        onSubmit={(v) => {
+          setAmount(parseFloat(v) || 0);
+          setPad(false);
+        }}
+      />
+      <ManagerAuth
+        open={auth}
+        title="Approve refund"
+        onCancel={() => setAuth(false)}
+        onAuthed={() => {
+          if (amount != null && reason) {
+            onAction({ amount, reason, managerAuthed: true });
+            toast.success(`Refunded $${amount.toFixed(2)}`);
+          }
+          setAuth(false);
+          setAmount(null);
+          setReason(null);
+        }}
+      />
+    </PicoCard>
+  );
+}
+
+// ---------- 3.11 Reprint Receipt -----------------------------------------
+export function ReprintReceipt({
+  config,
+  onAction,
+}: PicoBiteProps<{ recent?: { id: string; total: number }[] }, { ticketId: string }>) {
+  const recent = config.recent ?? [
+    { id: "T-0997", total: 22.5 },
+    { id: "T-0998", total: 14.0 },
+    { id: "T-0999", total: 41.75 },
+  ];
+  return (
+    <PicoCard title="Reprint Receipt" subtitle="Recent transactions">
+      <div className="flex flex-col gap-1">
+        {recent.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => {
+              onAction({ ticketId: r.id });
+              toast.success(`Reprinted ${r.id}`);
+            }}
+            className="flex items-center justify-between p-2 rounded-lg bg-secondary text-[13px]"
+          >
+            <span className="font-semibold">{r.id}</span>
+            <span className="tabular-nums text-muted-foreground">${r.total.toFixed(2)}</span>
+          </button>
+        ))}
+      </div>
+    </PicoCard>
+  );
+}
+
+// ---------- 3.12 Gift Card Sell ------------------------------------------
+export function GiftCardSell({
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<Record<string, never>, { amount: number; cardCode: string }>) {
+  const [pad, setPad] = useState<null | "amount" | "code">(null);
+  const [amount, setAmount] = useState<number | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  return (
+    <PicoCard title="Sell Gift Card" subtitle="Load balance to a new card">
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => setPad("amount")} className="p-3 rounded-xl bg-secondary text-left">
+          <div className="text-[10px] uppercase text-muted-foreground">Amount</div>
+          <div className="text-[16px] font-semibold tabular-nums">
+            {amount != null ? `$${amount.toFixed(2)}` : "—"}
+          </div>
+        </button>
+        <button onClick={() => setPad("code")} className="p-3 rounded-xl bg-secondary text-left">
+          <div className="text-[10px] uppercase text-muted-foreground">Card</div>
+          <div className="text-[14px] font-semibold">{code ?? "Scan / enter"}</div>
+        </button>
+      </div>
+      <ActionButton
+        disabled={!gateSatisfied || amount == null || amount <= 0 || !code}
+        onClick={() => {
+          if (amount != null && code) {
+            onAction({ amount, cardCode: code });
+            toast.success(`Gift card loaded $${amount.toFixed(2)}`);
+            setAmount(null);
+            setCode(null);
+          }
+        }}
+      >
+        Complete Sale
+      </ActionButton>
+      <Numpad
+        open={pad === "amount"}
+        title="Gift card amount"
+        mode="currency"
+        onCancel={() => setPad(null)}
+        onSubmit={(v) => {
+          setAmount(parseFloat(v) || 0);
+          setPad(null);
+        }}
+      />
+      <Numpad
+        open={pad === "code"}
+        title="Gift card code"
+        mode="pin"
+        maxLength={16}
+        onCancel={() => setPad(null)}
+        onSubmit={(v) => {
+          setCode(v);
+          setPad(null);
+        }}
+      />
+    </PicoCard>
+  );
+}
+
+// ---------- 3.13 Gift Card Redeem ----------------------------------------
+export function GiftCardRedeem({
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<Record<string, never>, { cardCode: string; amountApplied: number }>) {
+  const [pad, setPad] = useState<null | "code" | "amount">(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [amount, setAmount] = useState<number | null>(null);
+  return (
+    <PicoCard title="Redeem Gift Card" subtitle="Apply balance to check">
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => setPad("code")} className="p-3 rounded-xl bg-secondary text-left">
+          <div className="text-[10px] uppercase text-muted-foreground">Card</div>
+          <div className="text-[14px] font-semibold">{code ?? "Enter code"}</div>
+        </button>
+        <button onClick={() => setPad("amount")} className="p-3 rounded-xl bg-secondary text-left">
+          <div className="text-[10px] uppercase text-muted-foreground">Apply</div>
+          <div className="text-[16px] font-semibold tabular-nums">
+            {amount != null ? `$${amount.toFixed(2)}` : "—"}
+          </div>
+        </button>
+      </div>
+      <ActionButton
+        disabled={!gateSatisfied || !code || amount == null || amount <= 0}
+        onClick={() => {
+          if (code && amount != null) {
+            onAction({ cardCode: code, amountApplied: amount });
+            toast.success(`Applied $${amount.toFixed(2)}`);
+            setCode(null);
+            setAmount(null);
+          }
+        }}
+      >
+        Apply to Check
+      </ActionButton>
+      <Numpad
+        open={pad === "code"}
+        title="Gift card code"
+        mode="pin"
+        maxLength={16}
+        onCancel={() => setPad(null)}
+        onSubmit={(v) => {
+          setCode(v);
+          setPad(null);
+        }}
+      />
+      <Numpad
+        open={pad === "amount"}
+        title="Amount to apply"
+        mode="currency"
+        onCancel={() => setPad(null)}
+        onSubmit={(v) => {
+          setAmount(parseFloat(v) || 0);
+          setPad(null);
+        }}
+      />
+    </PicoCard>
+  );
+}
+
+// ---------- 3.14 Discount Apply ------------------------------------------
+type DiscountPreset = { id: string; label: string; kind: "percent" | "amount"; value: number };
+export function DiscountApply({
+  config,
+  onAction,
+}: PicoBiteProps<
+  { presets?: DiscountPreset[]; threshold?: number; subtotal?: number },
+  { discountId: string; label: string; kind: "percent" | "amount"; value: number; managerAuthed: boolean }
+>) {
+  const presets: DiscountPreset[] = config.presets ?? [
+    { id: "d10", label: "10% Off", kind: "percent", value: 10 },
+    { id: "d15", label: "15% Off", kind: "percent", value: 15 },
+    { id: "emp", label: "Employee 25%", kind: "percent", value: 25 },
+    { id: "d5", label: "$5 Off", kind: "amount", value: 5 },
+  ];
+  const threshold = config.threshold ?? 15;
+  const subtotal = config.subtotal ?? 0;
+  const [pending, setPending] = useState<DiscountPreset | null>(null);
+  const [auth, setAuth] = useState(false);
+  const apply = (p: DiscountPreset, managerAuthed: boolean) => {
+    onAction({ discountId: p.id, label: p.label, kind: p.kind, value: p.value, managerAuthed });
+    toast.success(`Applied ${p.label}`);
+  };
+  const tap = (p: DiscountPreset) => {
+    const impact = p.kind === "percent" ? (subtotal * p.value) / 100 : p.value;
+    if (impact > threshold) {
+      setPending(p);
+      setAuth(true);
+    } else {
+      apply(p, false);
+    }
+  };
+  return (
+    <PicoCard title="Apply Discount" subtitle={`Above $${threshold} needs manager`}>
+      <div className="grid grid-cols-2 gap-2">
+        {presets.map((p) => (
+          <ActionButton key={p.id} variant="ghost" onClick={() => tap(p)}>
+            {p.label}
+          </ActionButton>
+        ))}
+      </div>
+      <ManagerAuth
+        open={auth}
+        title="Approve discount"
+        onCancel={() => {
+          setAuth(false);
+          setPending(null);
+        }}
+        onAuthed={() => {
+          if (pending) apply(pending, true);
+          setAuth(false);
+          setPending(null);
+        }}
+      />
+    </PicoCard>
+  );
+}

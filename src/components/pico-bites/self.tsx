@@ -78,3 +78,111 @@ export function MySalesAndTips({
     </PicoCard>
   );
 }
+
+// ---------- 7.3 Table Handoff --------------------------------------------
+export function TableHandoff({
+  config,
+  onAction,
+  gateSatisfied = true,
+}: PicoBiteProps<
+  { employees?: { id: string; label: string }[]; tables?: { id: string; label: string }[] },
+  { toEmployeeId: string; tableIds: string[] }
+>) {
+  const employees = config.employees ?? [
+    { id: "emp.jordan", label: "Jordan" },
+    { id: "emp.riley", label: "Riley" },
+    { id: "emp.sam", label: "Sam" },
+  ];
+  const tables = config.tables ?? [
+    { id: "T2", label: "T2" },
+    { id: "T5", label: "T5" },
+  ];
+  const [target, setTarget] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const togglePick = (id: string) =>
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  return (
+    <PicoCard title="Table Handoff" subtitle="Reassign tables to another server">
+      <div className="grid grid-cols-3 gap-2">
+        {employees.map((e) => (
+          <button
+            key={e.id}
+            onClick={() => setTarget(e.id)}
+            className={`min-h-[40px] rounded-xl text-[12px] font-semibold ${
+              target === e.id ? "bg-primary text-primary-foreground" : "bg-secondary"
+            }`}
+          >
+            {e.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2 border-t pt-2">
+        {tables.map((t) => {
+          const on = picked.includes(t.id);
+          return (
+            <button
+              key={t.id}
+              onClick={() => togglePick(t.id)}
+              className={`min-h-[40px] rounded-xl text-[12px] font-semibold ${
+                on ? "bg-emerald-500/20 text-emerald-700" : "bg-secondary"
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      <ActionButton
+        disabled={!gateSatisfied || !target || picked.length === 0}
+        onClick={() => {
+          if (!target) return;
+          onAction({ toEmployeeId: target, tableIds: picked });
+          toast.success("Handoff complete");
+          setTarget(null);
+          setPicked([]);
+        }}
+      >
+        Hand Off
+      </ActionButton>
+    </PicoCard>
+  );
+}
+
+// ---------- 7.4 Employee Broadcast ---------------------------------------
+export function EmployeeBroadcast({
+  config,
+  onAction,
+}: PicoBiteProps<
+  { messages?: { id: string; title: string; body: string; postedAt?: string }[] },
+  { messageId: string; acknowledged: true }
+>) {
+  const messages = config.messages ?? [
+    { id: "m1", title: "Menu 86 update", body: "Fish tacos 86 for the night." },
+    { id: "m2", title: "New special", body: "Push the mole burrito — $2 SPIFF." },
+  ];
+  const [acked, setAcked] = useState<Set<string>>(new Set());
+  return (
+    <PicoCard title="Announcements" subtitle="Tap to acknowledge">
+      <div className="flex flex-col gap-1">
+        {messages.map((m) => {
+          const on = acked.has(m.id);
+          return (
+            <button
+              key={m.id}
+              onClick={() => {
+                if (on) return;
+                setAcked((s) => new Set(s).add(m.id));
+                onAction({ messageId: m.id, acknowledged: true });
+              }}
+              className={`p-2 rounded-lg text-left ${on ? "bg-emerald-500/20" : "bg-secondary"}`}
+            >
+              <div className="text-[12px] font-semibold">{m.title}</div>
+              <div className="text-[11px] text-muted-foreground">{m.body}</div>
+              {on && <div className="text-[10px] text-emerald-700 mt-0.5">✓ Acknowledged</div>}
+            </button>
+          );
+        })}
+      </div>
+    </PicoCard>
+  );
+}
