@@ -335,6 +335,38 @@ export const PICO_BITE_REGISTRY: Record<string, PicoBiteEntry> = {
     gate: "none",
     defaultConfig: {},
   },
+
+  // POS · order flow gaps
+  "hosp.ft.pos.order_type": { component: OrderTypeChange, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.pos.reopen_check": { component: ReopenCheck, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.pos.reprint_chit": { component: ReprintChit, gate: "shift-lock", defaultConfig: {} },
+
+  // Inventory · counts & timed 86
+  "hosp.ft.inv.cycle_count": { component: PhysicalCount, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.inv.timed_86": { component: Timed86, gate: "shift-lock", defaultConfig: {} },
+
+  // Payment · refunds, receipts, gift cards, discounts
+  "hosp.ft.pay.refund": { component: Refund, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.pay.reprint_receipt": { component: ReprintReceipt, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.pay.gc_sell": { component: GiftCardSell, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.pay.gc_redeem": { component: GiftCardRedeem, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.pay.discount_apply": {
+    component: DiscountApply,
+    gate: "shift-lock",
+    defaultConfig: { threshold: 15 },
+  },
+
+  // Fleet · EOD cash handling
+  "hosp.ft.fleet.pay_out": { component: CashPayout, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.fleet.deposit": { component: DepositEnvelope, gate: "shift-lock", defaultConfig: {} },
+
+  // Customer · save + notes (INSERT/UPDATE only, never upsert)
+  "hosp.ft.cust.save": { component: GuestSave, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.cust.notes": { component: GuestNotes, gate: "shift-lock", defaultConfig: {} },
+
+  // Self · handoff + announcements
+  "hosp.ft.self.handoff": { component: TableHandoff, gate: "shift-lock", defaultConfig: {} },
+  "hosp.ft.self.broadcast": { component: EmployeeBroadcast, gate: "none", defaultConfig: {} },
 };
 
 export function getPicoBite(tag: string): PicoBiteEntry | null {
