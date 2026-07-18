@@ -24,6 +24,7 @@ export function QuickFireItemAdd({
   gateSatisfied = true,
   gateReason,
 }: PicoBiteProps<GridConfig, Tile>) {
+  const tiles = config.tiles ?? [];
   const [cart, setCart] = useState<Tile[]>([]);
   const tap = (item: Tile) => {
     if (!gateSatisfied) return toast.error(gateReason ?? "Locked");
@@ -33,23 +34,29 @@ export function QuickFireItemAdd({
   const total = cart.reduce((s, i) => s + (i.price ?? 0), 0);
   return (
     <PicoCard title={config.title ?? "Quick-Fire Item Add"} subtitle={config.subtitle}>
-      <div className="grid grid-cols-3 gap-3">
-        {config.tiles.map((it) => (
-          <button
-            key={it.id}
-            onClick={() => tap(it)}
-            disabled={!gateSatisfied}
-            className="min-h-[88px] rounded-2xl bg-primary/10 hover:bg-primary/15 disabled:opacity-40 flex flex-col items-center justify-center gap-1 active:scale-[0.97]"
-          >
-            <span className="text-[15px] font-semibold">{it.label}</span>
-            {typeof it.price === "number" && (
-              <span className="text-[12px] text-muted-foreground">
-                ${it.price.toFixed(2)}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {tiles.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground text-center py-3">
+          No tiles published from Hub yet.
+        </p>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          {tiles.map((it) => (
+            <button
+              key={it.id}
+              onClick={() => tap(it)}
+              disabled={!gateSatisfied}
+              className="min-h-[88px] rounded-2xl bg-primary/10 hover:bg-primary/15 disabled:opacity-40 flex flex-col items-center justify-center gap-1 active:scale-[0.97]"
+            >
+              <span className="text-[15px] font-semibold">{it.label}</span>
+              {typeof it.price === "number" && (
+                <span className="text-[12px] text-muted-foreground">
+                  ${it.price.toFixed(2)}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex items-center justify-between border-t pt-3">
         <span className="text-[12px] text-muted-foreground">
           Cart: {cart.length}
@@ -78,32 +85,37 @@ export function ModifierApplication({
     );
     onAction(m);
   };
+  const modifiers = config.modifiers ?? [];
   return (
     <PicoCard title={config.title ?? "Modifiers"} subtitle={config.subtitle}>
-      <div className="grid grid-cols-2 gap-2">
-        {config.modifiers.map((m) => {
-          const on = selected.includes(m.id);
-          return (
-            <button
-              key={m.id}
-              disabled={!gateSatisfied}
-              onClick={() => toggle(m)}
-              className={`min-h-[60px] rounded-xl px-3 text-[13px] font-semibold transition-all ${
-                on
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-foreground"
-              }`}
-            >
-              <div>{m.label}</div>
-              {typeof m.delta === "number" && (
-                <div className="text-[10px] opacity-70">
-                  {m.delta > 0 ? "+" : ""}${m.delta.toFixed(2)}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {modifiers.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground text-center py-3">
+          No modifiers published from Hub yet.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {modifiers.map((m) => {
+            const on = selected.includes(m.id);
+            return (
+              <button
+                key={m.id}
+                disabled={!gateSatisfied}
+                onClick={() => toggle(m)}
+                className={`min-h-[60px] rounded-xl px-3 text-[13px] font-semibold transition-all ${
+                  on ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+                }`}
+              >
+                <div>{m.label}</div>
+                {typeof m.delta === "number" && (
+                  <div className="text-[10px] opacity-70">
+                    {m.delta > 0 ? "+" : ""}${m.delta.toFixed(2)}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </PicoCard>
   );
 }
@@ -220,17 +232,8 @@ export function CourseAssignment({
   onAction,
   gateSatisfied = true,
 }: PicoBiteProps<{ items?: { id: string; label: string }[]; courses?: Course[] }, { itemId: string; course: string }>) {
-  const items = config.items ?? [
-    { id: "sku.app", label: "Appetizer" },
-    { id: "sku.entree", label: "Entree" },
-    { id: "sku.dessert", label: "Dessert" },
-  ];
-  const courses: Course[] = config.courses ?? [
-    { id: "1", label: "Course 1" },
-    { id: "2", label: "Course 2" },
-    { id: "3", label: "Course 3" },
-    { id: "dessert", label: "Dessert" },
-  ];
+  const items = config.items ?? [];
+  const courses: Course[] = config.courses ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const assign = (course: string) => {
     if (!selected) return toast.error("Pick an item first");
@@ -275,10 +278,7 @@ export function OrderPacingTimer({
   onAction,
 }: PicoBiteProps<{ tickets?: { id: string; startedAt: number }[]; thresholdSec?: number }, { ticketId: string; bumped: true }>) {
   const threshold = config.thresholdSec ?? 300;
-  const tickets = config.tickets ?? [
-    { id: "T-1001", startedAt: Date.now() - 120_000 },
-    { id: "T-1002", startedAt: Date.now() - 340_000 },
-  ];
+  const tickets = config.tickets ?? [];
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const i = setInterval(() => setNow(Date.now()), 1000);
@@ -351,11 +351,7 @@ export function ReopenCheck({
   config,
   onAction,
 }: PicoBiteProps<{ recentClosed?: { id: string; total: number }[] }, { ticketId: string; managerAuthed: true }>) {
-  const recent = config.recentClosed ?? [
-    { id: "T-0997", total: 22.5 },
-    { id: "T-0998", total: 14.0 },
-    { id: "T-0999", total: 41.75 },
-  ];
+  const recent = config.recentClosed ?? [];
   const [pending, setPending] = useState<string | null>(null);
   return (
     <PicoCard title="Reopen Check" subtitle="Manager approval required">
@@ -393,7 +389,7 @@ export function ReprintChit({
   onAction,
   gateSatisfied = true,
 }: PicoBiteProps<{ stations?: string[]; lastTicketId?: string }, { ticketId: string; station: string }>) {
-  const stations = config.stations ?? ["Grill", "Expo", "Bar", "Cold"];
+  const stations = config.stations ?? [];
   const ticketId = config.lastTicketId ?? "last";
   return (
     <PicoCard title="Reprint Chit" subtitle="Re-fire to kitchen station">

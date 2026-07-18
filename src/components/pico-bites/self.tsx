@@ -88,15 +88,8 @@ export function TableHandoff({
   { employees?: { id: string; label: string }[]; tables?: { id: string; label: string }[] },
   { toEmployeeId: string; tableIds: string[] }
 >) {
-  const employees = config.employees ?? [
-    { id: "emp.jordan", label: "Jordan" },
-    { id: "emp.riley", label: "Riley" },
-    { id: "emp.sam", label: "Sam" },
-  ];
-  const tables = config.tables ?? [
-    { id: "T2", label: "T2" },
-    { id: "T5", label: "T5" },
-  ];
+  const employees = config.employees ?? [];
+  const tables = config.tables ?? [];
   const [target, setTarget] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const togglePick = (id: string) =>
@@ -156,10 +149,7 @@ export function EmployeeBroadcast({
   { messages?: { id: string; title: string; body: string; postedAt?: string }[] },
   { messageId: string; acknowledged: true }
 >) {
-  const messages = config.messages ?? [
-    { id: "m1", title: "Menu 86 update", body: "Fish tacos 86 for the night." },
-    { id: "m2", title: "New special", body: "Push the mole burrito — $2 SPIFF." },
-  ];
+  const messages = config.messages ?? [];
   const [acked, setAcked] = useState<Set<string>>(new Set());
   return (
     <PicoCard title="Announcements" subtitle="Tap to acknowledge">

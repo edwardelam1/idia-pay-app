@@ -44,7 +44,7 @@ export function GpsCheckIn({
       { timeout: 8000 },
     );
   };
-  const list = config.locations ?? ["Downtown Lot", "Stadium", "Market"];
+  const list = config.locations ?? [];
   return (
     <PicoCard title="GPS Check-In" subtitle={location ? `Locked · ${location}` : "Pick a location"}>
       <div className="flex flex-col gap-2">
