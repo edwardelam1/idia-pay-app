@@ -970,7 +970,7 @@ function PosSurface({
           )}
         </div>
       )}
-      <NanoBiteHost nanoBiteId="hosp.ft.sales.mobile_pos" className="px-4 py-3 border-t bg-card/70" />
+      <NanoBiteHost nanoBiteId="hosp.ft.sales.mobile_pos" className="shrink-0 max-h-[38%] overflow-y-auto px-3 py-2 border-t bg-card/85 backdrop-blur" />
     </div>
   );
 }
