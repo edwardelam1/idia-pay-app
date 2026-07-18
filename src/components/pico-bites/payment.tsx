@@ -196,12 +196,7 @@ export function SplitByItem({
   onAction,
   gateSatisfied = true,
 }: PicoBiteProps<{ items?: LineItem[]; checkCount?: number }, { assignments: Record<string, number>; totals: number[] }>) {
-  const items = config.items ?? [
-    { id: "l1", label: "Taco", price: 4.5 },
-    { id: "l2", label: "Burrito", price: 9 },
-    { id: "l3", label: "Horchata", price: 3 },
-    { id: "l4", label: "Nachos", price: 6.5 },
-  ];
+  const items = config.items ?? [];
   const checkCount = config.checkCount ?? 2;
   const [assignments, setAssignments] = useState<Record<string, number>>({});
   const cycle = (id: string) => {
@@ -465,11 +460,7 @@ export function ReprintReceipt({
   config,
   onAction,
 }: PicoBiteProps<{ recent?: { id: string; total: number }[] }, { ticketId: string }>) {
-  const recent = config.recent ?? [
-    { id: "T-0997", total: 22.5 },
-    { id: "T-0998", total: 14.0 },
-    { id: "T-0999", total: 41.75 },
-  ];
+  const recent = config.recent ?? [];
   return (
     <PicoCard title="Reprint Receipt" subtitle="Recent transactions">
       <div className="flex flex-col gap-1">
@@ -620,12 +611,7 @@ export function DiscountApply({
   { presets?: DiscountPreset[]; threshold?: number; subtotal?: number },
   { discountId: string; label: string; kind: "percent" | "amount"; value: number; managerAuthed: boolean }
 >) {
-  const presets: DiscountPreset[] = config.presets ?? [
-    { id: "d10", label: "10% Off", kind: "percent", value: 10 },
-    { id: "d15", label: "15% Off", kind: "percent", value: 15 },
-    { id: "emp", label: "Employee 25%", kind: "percent", value: 25 },
-    { id: "d5", label: "$5 Off", kind: "amount", value: 5 },
-  ];
+  const presets: DiscountPreset[] = config.presets ?? [];
   const threshold = config.threshold ?? 15;
   const subtotal = config.subtotal ?? 0;
   const [pending, setPending] = useState<DiscountPreset | null>(null);

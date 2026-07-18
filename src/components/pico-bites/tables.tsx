@@ -23,14 +23,7 @@ export function FloorPlan({
   onAction,
   gateSatisfied = true,
 }: PicoBiteProps<{ tables?: Table[] }, { tableId: string; status: TableStatus }>) {
-  const tables: Table[] = config.tables ?? [
-    { id: "T1", label: "T1", status: "open" },
-    { id: "T2", label: "T2", status: "seated", seatedAt: Date.now() - 600_000 },
-    { id: "T3", label: "T3", status: "paid" },
-    { id: "T4", label: "T4", status: "open" },
-    { id: "T5", label: "T5", status: "seated", seatedAt: Date.now() - 1_200_000 },
-    { id: "T6", label: "T6", status: "open" },
-  ];
+  const tables: Table[] = config.tables ?? [];
   return (
     <PicoCard title="Floor Plan" subtitle="Tap a table to open">
       <div className="grid grid-cols-3 gap-2">
@@ -155,12 +148,7 @@ export function TableTransfer({
   onAction,
   gateSatisfied = true,
 }: PicoBiteProps<{ tables?: Table[] }, { fromTable: string; toTable: string; managerAuthed: true }>) {
-  const tables = config.tables ?? [
-    { id: "T1", label: "T1", status: "open" as TableStatus },
-    { id: "T2", label: "T2", status: "seated" as TableStatus },
-    { id: "T3", label: "T3", status: "open" as TableStatus },
-    { id: "T4", label: "T4", status: "open" as TableStatus },
-  ];
+  const tables = config.tables ?? [];
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [auth, setAuth] = useState(false);

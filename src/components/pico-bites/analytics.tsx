@@ -25,9 +25,7 @@ function RowList({ rows }: { rows: Row[] }) {
 
 // ---------- 5.1 Product Mix ----------------------------------------------
 export function ViewPmix({ config, onAction }: PicoBiteProps<RowsConfig, { viewed: "pmix" }>) {
-  const rows = config.rows ?? [
-    { label: "Awaiting live data", value: "—" },
-  ];
+  const rows = config.rows ?? [{ label: "Awaiting live data", value: "—" }];
   return (
     <PicoCard title={config.title ?? "Product Mix"} subtitle={config.subtitle}>
       <RowList rows={rows} />
