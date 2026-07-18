@@ -459,6 +459,7 @@ function HealthPermitLogCore() {
           </div>
         </div>
       )}
+      <NanoBiteHost nanoBiteId="hosp.ft.infra.health" className="px-4 py-3 border-t bg-card/70" />
     </div>
   );
 }
