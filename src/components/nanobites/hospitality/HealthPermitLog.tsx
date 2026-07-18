@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { LiquidOSErrorBoundary } from "@/lib/error-boundary";
 import { logPlanck } from "@/lib/error-capture";
 import { useActiveBusinessId } from "@/lib/idia/ActiveBusinessContext";
+import NanoBiteHost from "@/components/nanobites/NanoBiteHost";
 
 // ============================================================================
 // SCHEMA — UUID `id` is authoritative
@@ -458,6 +459,7 @@ function HealthPermitLogCore() {
           </div>
         </div>
       )}
+      <NanoBiteHost nanoBiteId="hosp.ft.infra.health" className="px-4 py-3 border-t bg-card/70" />
     </div>
   );
 }

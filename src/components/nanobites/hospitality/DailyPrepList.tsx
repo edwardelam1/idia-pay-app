@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import NanoBiteHost from "@/components/nanobites/NanoBiteHost";
 
 // ============================================================================
 // STRICT DATA SCHEMAS (NO MOCK DATA. NO STUBS. EVER.)
@@ -542,6 +543,7 @@ export default function DailyPrepList({ businessId = "default" }: { businessId?:
           </div>
         </div>
       )}
+      <NanoBiteHost nanoBiteId="hosp.ft.ops.prep" className="px-4 py-3 bg-white/80 border-t" />
     </div>
   );
 }

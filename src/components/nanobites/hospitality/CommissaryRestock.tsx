@@ -40,6 +40,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import NanoBiteHost from "@/components/nanobites/NanoBiteHost";
 
 // ============================================================================
 // CONSTANTS
@@ -563,6 +564,7 @@ export default function CommissaryRestockFactory({
           Publish Workflow
         </button>
       )}
+      <NanoBiteHost nanoBiteId="hosp.ft.ops.restock" className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t bg-white/85 backdrop-blur-xl z-40" />
     </div>
   );
 }
