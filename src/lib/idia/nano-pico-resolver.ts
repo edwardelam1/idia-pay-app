@@ -143,47 +143,8 @@ function fromBlueprint(nanoBiteId: string): ResolvedLayout | null {
   return null;
 }
 
-async function fromLegacyRelations(nanoBiteId: string): Promise<ResolvedLayout> {
-  const empty: ResolvedLayout = { nanoBiteId, bites: [] };
-  try {
-    const { data, error } = await supabase
-      .from("idia_nano_pico_relations")
-      .select(
-        "relationship_weight, is_mandatory, slot, config_override, idia_pico_bites!inner ( tag, name, default_config )",
-      )
-      .eq("nano_bite_id", nanoBiteId)
-      .order("relationship_weight", { ascending: false });
-    if (error) throw error;
-    if (!data) return empty;
-
-    type Row = {
-      relationship_weight: number;
-      is_mandatory: boolean;
-      slot: string | null;
-      config_override: Record<string, unknown> | null;
-      idia_pico_bites:
-        | { tag: string; name: string; default_config: Record<string, unknown> | null }
-        | Array<{ tag: string; name: string; default_config: Record<string, unknown> | null }>;
-    };
-    const rows: IncomingPico[] = (data as unknown as Row[]).map((r) => {
-      const pico = Array.isArray(r.idia_pico_bites)
-        ? r.idia_pico_bites[0]
-        : r.idia_pico_bites;
-      return {
-        tag: pico.tag,
-        name: pico.name,
-        slot: r.slot,
-        weight: r.relationship_weight,
-        mandatory: r.is_mandatory,
-        config: { ...(pico.default_config ?? {}), ...(r.config_override ?? {}) },
-      };
-    });
-    return resolveConflicts(nanoBiteId, rows);
-  } catch (err) {
-    console.warn("[nano-pico-resolver] legacy fallback failed", err);
-    return empty;
-  }
-}
+// Legacy `idia_nano_pico_relations` fallback removed — that table has been
+// dropped now that the Hub blueprint is the sole source of truth.
 
 export async function fetchNanoPicoLayout(
   nanoBiteId: string,
