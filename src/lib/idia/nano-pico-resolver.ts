@@ -168,12 +168,11 @@ export async function fetchNanoPicoLayout(
   }
 
   console.info(
-    `[nano-pico-resolver] source=legacy-relations nano=${nanoBiteId}`,
+    `[nano-pico-resolver] source=empty nano=${nanoBiteId} (no blueprint cached)`,
   );
-  const legacy = await fromLegacyRelations(nanoBiteId);
-  CACHE.set(nanoBiteId, legacy);
-  writeSession(legacy);
-  return legacy;
+  const empty: ResolvedLayout = { nanoBiteId, bites: [] };
+  CACHE.set(nanoBiteId, empty);
+  return empty;
 }
 
 export function clearNanoPicoCache() {
