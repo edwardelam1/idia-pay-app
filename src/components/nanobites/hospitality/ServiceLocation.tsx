@@ -324,7 +324,7 @@ function ServiceLocationCore() {
         </div>
       </div>
 
-      <NanoBiteHost nanoBiteId="hosp.ft.ops.service_loc" className="mt-2" />
+      <NanoBiteHost nanoBiteId="hosp.ft.ops.service_loc" className="mt-2 px-3 py-2 border-t bg-card/70 rounded-t-xl" />
 
       <div className="mt-auto">
         <Button
