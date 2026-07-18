@@ -1,58 +1,96 @@
-## Goal
-Turn the current one-button "Fire Ticket" stub into a real Toast-style Kitchen Display System — with prep stations, expediter vs prep-station device roles, live tickets, bump/recall, and All Day View — backed by real Supabase tables and realtime updates. No mock data.
 
-## Toast KDS features to cover
-From the Toast article:
-1. Fire tickets from POS → appear on KDS oldest→newest
-2. Prep station routing (each item goes to the correct station)
-3. Device role: **Expediter** (sees whole order) vs **Prep Station** (sees only its items)
-4. **Bump / Fulfill** — whole ticket or single item
-5. **Show Recently Fulfilled** + **Unfulfill**
-6. **Recall** — re-open the most recently fulfilled ticket
-7. **All Day View** — aggregate count of each item still to make
-8. Device setup (assign role + stations)
+## Architecture recap (confirmed)
 
-## New database tables
-All under `public`, RLS on, `authenticated` grants, service_role full, scoped by `business_id` (matches existing tenancy pattern in `daily_prep_list`, `nano_bite_executions`).
+- The 5 files in `src/components/nanobites/hospitality/` (`ServiceLocation`, `DailyPrepList`, `MobilePosSale`, `HealthPermitLog`, `CommissaryRestock`) are **Nano-Bite containers** (forms), not legacy debt.
+- Pico-Bites in `src/components/pico-bites/` are **inputs** that mount inside a Nano-Bite container.
+- Which Pico-Bites appear in which Nano-Bite — and who wins UI conflicts — is decided by weighted rows in Supabase, editable from IDIA Hub without a deploy.
 
-- `kds_stations` — id, business_id, name, sort_order, is_expediter (bool), active
-- `kds_devices` — id, business_id, device_id (text, matches provisioning), role ('expediter'|'prep'), station_ids uuid[], last_seen_at
-- `kds_tickets` — id, business_id, ticket_number (short human code), source ('pos'|'online'|'kiosk'), order_type, table_label, server_name, fired_at, status ('active'|'fulfilled'|'recalled'), fulfilled_at, recalled_at
-- `kds_ticket_items` — id, ticket_id fk cascade, business_id, menu_item_id nullable, name, quantity, modifiers jsonb, station_id fk kds_stations, course int, status ('pending'|'fulfilled'), fulfilled_at, sort_order
-- `menu_item_station_routes` (optional light table) — business_id, menu_item_id or menu_item_name, station_id — used server-side to compute `station_id` on ticket_items when firing
+## Database (migration)
 
-Indexes: `(business_id, status, fired_at)` on tickets; `(ticket_id)`, `(business_id, station_id, status)` on items. Add both tables to `supabase_realtime` publication.
+Three new tables. All are catalog/relationship data, not tenant-owned, so reads are open to `authenticated` (and `anon` for terminal boot); writes are `service_role` only (Hub pushes via edge / admin).
 
-## Server functions (`createServerFn` + `requireSupabaseAuth`)
-`src/lib/kds.functions.ts`:
-- `fireKdsTicket({ items, table_label, server_name, order_type, source })` — creates ticket + items, resolves station per item via `menu_item_station_routes` (fallback: default station).
-- `bumpItem({ item_id })`, `bumpTicket({ ticket_id })` — mark fulfilled; when all items fulfilled, mark ticket fulfilled.
-- `unfulfillItem({ item_id })`, `recallLastTicket({ station_id? })` — flip back to `active`, mark `recalled_at`.
-- `upsertKdsDevice({ device_id, role, station_ids })` (uses explicit INSERT-or-UPDATE per project rule — **no upsert**).
-- `listActiveTickets({ station_id? })` used only for SSR/first paint; live updates via Supabase realtime channel on the client.
+1. `public.idia_pico_bites`
+   - `id text PK` (e.g. `pico.pos.numpad`)
+   - `tag text unique not null` (matches `PICO_BITE_REGISTRY` key, e.g. `hosp.ft.pos.item_add`)
+   - `name text not null`
+   - `ui_component text not null` (matches the React component export used by the registry)
+   - `default_config jsonb not null default '{}'`
+   - `gate_policy text not null default 'shift-lock'` (`'none' | 'shift-lock'`)
+   - `created_at`, `updated_at`
 
-## UI Pico-Bites (`src/components/pico-bites/kds.tsx`)
-Reachable via new telemetry tags under `hosp.ft.kds.*`. All go through `TelemetryBus` and honor `shift-lock` where financial-ish.
+2. `public.idia_nano_bites`
+   - `id text PK` (e.g. `hosp.ft.sales.mobile_pos`, matches current `NanoBiteSpec.id`)
+   - `name text not null`
+   - `container_file text not null` (e.g. `MobilePosSale.tsx` — resolved through `ATOM_FILE_MAP`)
+   - `industry_id text not null`
+   - `screen text` (which sidebar screen it renders on)
+   - `created_at`, `updated_at`
 
-- `KdsBoard` — grid of active tickets, oldest-left, per-item bump, "Bump All" per ticket. Subscribes to `kds_tickets`+`kds_ticket_items` realtime. Filter by device role/stations.
-- `KdsAllDayView` — collapses active items into `{name × qty}` totals (server-side aggregate query, refreshed on realtime).
-- `KdsRecentlyFulfilled` — last 20 fulfilled tickets in the last hour, with **Unfulfill**.
-- `KdsRecall` — one-tap recall of the most recent fulfilled ticket for this device's stations.
-- `KdsDeviceSetup` — pick role (Expediter/Prep) and stations; writes to `kds_devices` (INSERT-or-UPDATE, no upsert).
-- Rewrite existing `KdsTicketRouting` (POS side) to actually call `fireKdsTicket` with the current cart instead of a fake toast.
+3. `public.idia_nano_pico_relations`
+   - `nano_bite_id text references idia_nano_bites(id) on delete cascade`
+   - `pico_bite_id text references idia_pico_bites(id) on delete cascade`
+   - `relationship_weight int not null default 10` (higher wins; loser dims)
+   - `is_mandatory bool not null default false`
+   - `slot text` (optional layout hint: `primary | secondary | footer`)
+   - `config_override jsonb` (per-relation overrides merged over `default_config`)
+   - `PRIMARY KEY (nano_bite_id, pico_bite_id)`
+   - Index on `(nano_bite_id, relationship_weight desc)`
 
-Register all new tags in `src/components/pico-bites/registry.ts`.
+GRANTs + RLS per project rules: `GRANT SELECT` to `anon, authenticated`; `GRANT ALL` to `service_role`; RLS enabled; SELECT policy `USING (true)`; no INSERT/UPDATE/DELETE policy (service_role bypasses).
 
-## Realtime
-Subscribe inside `useEffect` with cleanup (per project rule). One channel per KDS screen, filtered by `business_id` and (for prep) station list.
+## Seed data
 
-## Out of scope for this pass
-- SMS alerts, kitchen productivity reports, multi-language, color-coded modifiers — flagged in Toast article but deferred; the schema leaves room (`modifiers jsonb`, timestamps) to add later.
-- Editing menu-item → station routes UI (seed via SQL/admin for now; the fire function tolerates missing routes by falling back to the default station).
+Seed all 20 current Food-Truck Pico-Bites from `src/components/pico-bites/registry.ts` into `idia_pico_bites` (id = tag; component name; default config; gate policy — all values already in the registry file, copied into rows).
 
-## Deliverables
-1. Migration: 4 tables + realtime publication + default "Expediter" and "Kitchen" stations per business (via trigger on `businesses` insert, plus one-time backfill).
-2. `src/lib/kds.functions.ts` with the six server fns above.
-3. `src/components/pico-bites/kds.tsx` with 5 new bites + rewritten `KdsTicketRouting`.
-4. Registry updates.
-5. Removes any remaining mock/stub state from KDS path (honors the no-mock rule).
+Seed the 5 Nano-Bite containers into `idia_nano_bites` mapping current `ATOM_FILE_MAP`:
+- `hosp.ft.ops.service_loc` → `ServiceLocation.tsx`
+- `hosp.ft.ops.prep` → `DailyPrepList.tsx`
+- `hosp.ft.sales.mobile_pos` → `MobilePosSale.tsx`
+- `hosp.ft.infra.health` → `HealthPermitLog.tsx`
+- `hosp.ft.ops.restock` → `CommissaryRestock.tsx`
+
+Seed a baseline `idia_nano_pico_relations` set that mirrors today's affinities (e.g. MobilePosSale ⇄ `hosp.ft.pos.*` + `hosp.ft.pay.*`; DailyPrepList ⇄ `hosp.ft.inv.log_waste`, `hosp.ft.inv.receive_stock`, `hosp.ft.inv.cycle_count`; ServiceLocation ⇄ `hosp.ft.fleet.loc_lock`, `hosp.ft.fleet.time_punch`; HealthPermitLog ⇄ `hosp.ft.inv.timed_86`, `hosp.ft.fleet.shift_review`; CommissaryRestock ⇄ `hosp.ft.inv.receive_stock`, `hosp.ft.inv.log_waste`). Weights authored so exact duplicates never draw; mandatory flag set on the anchor tag(s) per form.
+
+## Frontend wiring
+
+New module: `src/lib/idia/nano-pico-resolver.ts`
+- `fetchNanoPicoLayout(nanoBiteId): Promise<ResolvedLayout>` — joins the three tables, sorts by `relationship_weight desc`, marks the top weight per conflicting slot as `active`, others as `dimmed`, honors `is_mandatory`.
+- Falls back to a hardcoded map (current behavior) if the fetch errors, so terminals boot offline.
+- Result cached per `nano_bite_id` in `sessionStorage` for the session.
+
+New shell component: `src/components/nanobites/NanoBiteHost.tsx`
+- Given a `nano_bite_id`, resolves the layout, then renders each relation as a Pico-Bite via `getPicoBite(tag).component` with `config = {...default_config, ...config_override}`, `gateSatisfied` from the existing shift-lock hook, and a `dimmed` visual prop for losers.
+- Emits telemetry via the existing `TelemetryBus`.
+
+Refactor the 5 container files
+- Each keeps its bespoke chrome (title, header, layout regions, business-specific side-effects) but replaces its inline widget stack with `<NanoBiteHost nanoBiteId="hosp.ft.…" />` in the main content slot.
+- No mock data added; no business logic changed outside layout composition.
+
+Renderer dispatch (`src/lib/idia/LiquidOS.tsx`)
+- `NanoBiteRenderer` continues to prefer the flat `getPicoBite` path for spec ids that are themselves Pico-Bites.
+- When `spec.id` matches an `idia_nano_bites.id`, it renders the corresponding container file (via existing `ATOM_FILE_MAP`), which now internally uses `NanoBiteHost`.
+
+## Conflict-resolution rule
+
+- Two Pico-Bites are "in conflict" when they share the same `slot` on the same Nano-Bite.
+- Highest `relationship_weight` wins → rendered normally.
+- Losers with `is_mandatory = true` render at 50% opacity + `pointer-events: none` and show a tooltip "Overridden by <winner>".
+- Losers with `is_mandatory = false` are hidden.
+
+## Hub-side surface (out of scope for this repo, noted)
+
+- IDIA Hub gets a CRUD UI over these three tables via `service_role`. No changes required in IDIA Pay beyond consuming the tables.
+
+## Technical notes
+
+- Migration includes GRANTs + RLS + policy in the required 4-step order.
+- `updated_at` trigger reused (`public.update_updated_at_column`).
+- Types will regenerate after migration approval; only then wire the resolver + refactor containers.
+- No mock/simulation data; seed rows describe real tags already present in the frontend registry.
+
+## Deliverable order
+
+1. Migration (schema + GRANTs + RLS + policies + seed rows for pico-bites, nano-bites, and baseline relations) — one call.
+2. After approval + types regen: `nano-pico-resolver.ts` + `NanoBiteHost.tsx`.
+3. Refactor the 5 container files to render `<NanoBiteHost />` in their content slot.
+4. Verify: typecheck, load `IDIA-FRWD-NEUL`, confirm each of the 5 screens renders DB-driven Pico-Bites and that a manually-lowered weight in Supabase visibly dims the loser without redeploy.
