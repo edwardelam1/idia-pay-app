@@ -1,96 +1,49 @@
+## Diagnosis
 
-## Architecture recap (confirmed)
+The pico-bite data pipeline is working end-to-end:
 
-- The 5 files in `src/components/nanobites/hospitality/` (`ServiceLocation`, `DailyPrepList`, `MobilePosSale`, `HealthPermitLog`, `CommissaryRestock`) are **Nano-Bite containers** (forms), not legacy debt.
-- Pico-Bites in `src/components/pico-bites/` are **inputs** that mount inside a Nano-Bite container.
-- Which Pico-Bites appear in which Nano-Bite — and who wins UI conflicts — is decided by weighted rows in Supabase, editable from IDIA Hub without a deploy.
+- `idia_blueprint_v1` in localStorage contains the inline `picoBites` array for every nano-bite (verified: `hosp.ft.sales.mobile_pos` → 8 picos).
+- `fetchNanoPicoLayout('hosp.ft.sales.mobile_pos')` returns 4 resolved bites (`pos.item_add`, `pay.init_nfc`, `pos.mod_apply`, `pos.kds_fire`), all mapped in the client registry.
+- A `<section>` labeled "Live Inputs · 3 active" is actually mounted in the DOM with real pico-bite UI (Quick-Fire Add, Taco $4.50, etc.).
 
-## Database (migration)
+The dock is not blank — it is **clipped out of view**. In `MobilePosSale.tsx` the layout is:
 
-Three new tables. All are catalog/relationship data, not tenant-owned, so reads are open to `authenticated` (and `anon` for terminal boot); writes are `service_role` only (Hub pushes via edge / admin).
+```text
+<div class="flex h-full flex-col">   ← sovereign frame ~319x692, overflow:hidden
+  <header shrink-0 />
+  <div class="flex-1 overflow-y-auto"> ...menu/cart/tip... </div>   ← eats all height
+  <NanoBiteHost />                     ← pushed below the frame, clipped
+</div>
+```
 
-1. `public.idia_pico_bites`
-   - `id text PK` (e.g. `pico.pos.numpad`)
-   - `tag text unique not null` (matches `PICO_BITE_REGISTRY` key, e.g. `hosp.ft.pos.item_add`)
-   - `name text not null`
-   - `ui_component text not null` (matches the React component export used by the registry)
-   - `default_config jsonb not null default '{}'`
-   - `gate_policy text not null default 'shift-lock'` (`'none' | 'shift-lock'`)
-   - `created_at`, `updated_at`
+The same pattern repeats in `DailyPrepList`, `HealthPermitLog`, `CommissaryRestock`, and `ServiceLocation` — the host was appended as the last sibling in a flex column whose middle child already consumes all available height, so on the phone-shaped sovereign frame the dock sits below the visible area.
 
-2. `public.idia_nano_bites`
-   - `id text PK` (e.g. `hosp.ft.sales.mobile_pos`, matches current `NanoBiteSpec.id`)
-   - `name text not null`
-   - `container_file text not null` (e.g. `MobilePosSale.tsx` — resolved through `ATOM_FILE_MAP`)
-   - `industry_id text not null`
-   - `screen text` (which sidebar screen it renders on)
-   - `created_at`, `updated_at`
+## Fix
 
-3. `public.idia_nano_pico_relations`
-   - `nano_bite_id text references idia_nano_bites(id) on delete cascade`
-   - `pico_bite_id text references idia_pico_bites(id) on delete cascade`
-   - `relationship_weight int not null default 10` (higher wins; loser dims)
-   - `is_mandatory bool not null default false`
-   - `slot text` (optional layout hint: `primary | secondary | footer`)
-   - `config_override jsonb` (per-relation overrides merged over `default_config`)
-   - `PRIMARY KEY (nano_bite_id, pico_bite_id)`
-   - Index on `(nano_bite_id, relationship_weight desc)`
+Presentation-only change to the five hospitality container files. Do not touch the resolver, registry, blueprint, or telemetry bus.
 
-GRANTs + RLS per project rules: `GRANT SELECT` to `anon, authenticated`; `GRANT ALL` to `service_role`; RLS enabled; SELECT policy `USING (true)`; no INSERT/UPDATE/DELETE policy (service_role bypasses).
+1. **Make the dock a real footer**, not a trailing sibling that competes with `flex-1`:
+   - Wrap `<NanoBiteHost>` in a `shrink-0` footer band with a max-height and its own `overflow-y-auto`, so the dock always occupies the bottom slice of the frame and its inner grid can scroll if it overflows.
+   - Class shape: `shrink-0 border-t bg-card/85 backdrop-blur px-3 py-2 max-h-[38%] overflow-y-auto`.
 
-## Seed data
+2. **Tighten `NanoBiteHost` for narrow frames** so the visible slice actually shows tiles instead of just the header:
+   - Drop the `sm:grid-cols-2 lg:grid-cols-3` breakpoints in favor of `grid-cols-2` at all widths inside the dock (the sovereign frame is ~319px wide, so `sm:` never triggers and everything stacks 1-wide today).
+   - Reduce header vertical rhythm (`mb-1`, smaller "N active" chip) to reclaim space.
 
-Seed all 20 current Food-Truck Pico-Bites from `src/components/pico-bites/registry.ts` into `idia_pico_bites` (id = tag; component name; default config; gate policy — all values already in the registry file, copied into rows).
+3. **Apply the same footer wrapper to all five containers** so the dock is uniformly visible:
+   - `MobilePosSale.tsx` (nano `hosp.ft.sales.mobile_pos`)
+   - `DailyPrepList.tsx` (`hosp.ft.ops.prep`)
+   - `HealthPermitLog.tsx` (`hosp.ft.infra.health`)
+   - `CommissaryRestock.tsx` (`hosp.ft.ops.restock`)
+   - `ServiceLocation.tsx` (`hosp.ft.ops.service_loc`)
+   - For `CommissaryRestock`, replace the current `absolute bottom-0` band (which stacks over the scroll content) with the same flex-footer pattern for consistency.
 
-Seed the 5 Nano-Bite containers into `idia_nano_bites` mapping current `ATOM_FILE_MAP`:
-- `hosp.ft.ops.service_loc` → `ServiceLocation.tsx`
-- `hosp.ft.ops.prep` → `DailyPrepList.tsx`
-- `hosp.ft.sales.mobile_pos` → `MobilePosSale.tsx`
-- `hosp.ft.infra.health` → `HealthPermitLog.tsx`
-- `hosp.ft.ops.restock` → `CommissaryRestock.tsx`
+## Verification
 
-Seed a baseline `idia_nano_pico_relations` set that mirrors today's affinities (e.g. MobilePosSale ⇄ `hosp.ft.pos.*` + `hosp.ft.pay.*`; DailyPrepList ⇄ `hosp.ft.inv.log_waste`, `hosp.ft.inv.receive_stock`, `hosp.ft.inv.cycle_count`; ServiceLocation ⇄ `hosp.ft.fleet.loc_lock`, `hosp.ft.fleet.time_punch`; HealthPermitLog ⇄ `hosp.ft.inv.timed_86`, `hosp.ft.fleet.shift_review`; CommissaryRestock ⇄ `hosp.ft.inv.receive_stock`, `hosp.ft.inv.log_waste`). Weights authored so exact duplicates never draw; mandatory flag set on the anchor tag(s) per form.
+- Reload Mobile POS in the preview; confirm "Live Inputs · N active" band is visible at the bottom of the sovereign frame with real pico-bite tiles (Quick-Fire Add, Contactless Tap, etc.).
+- Repeat for Prep, Health, Restock, Service Loc.
+- Confirm the header/body layout of each container is unchanged and no new scroll appears on the outer page.
 
-## Frontend wiring
+## Out of scope
 
-New module: `src/lib/idia/nano-pico-resolver.ts`
-- `fetchNanoPicoLayout(nanoBiteId): Promise<ResolvedLayout>` — joins the three tables, sorts by `relationship_weight desc`, marks the top weight per conflicting slot as `active`, others as `dimmed`, honors `is_mandatory`.
-- Falls back to a hardcoded map (current behavior) if the fetch errors, so terminals boot offline.
-- Result cached per `nano_bite_id` in `sessionStorage` for the session.
-
-New shell component: `src/components/nanobites/NanoBiteHost.tsx`
-- Given a `nano_bite_id`, resolves the layout, then renders each relation as a Pico-Bite via `getPicoBite(tag).component` with `config = {...default_config, ...config_override}`, `gateSatisfied` from the existing shift-lock hook, and a `dimmed` visual prop for losers.
-- Emits telemetry via the existing `TelemetryBus`.
-
-Refactor the 5 container files
-- Each keeps its bespoke chrome (title, header, layout regions, business-specific side-effects) but replaces its inline widget stack with `<NanoBiteHost nanoBiteId="hosp.ft.…" />` in the main content slot.
-- No mock data added; no business logic changed outside layout composition.
-
-Renderer dispatch (`src/lib/idia/LiquidOS.tsx`)
-- `NanoBiteRenderer` continues to prefer the flat `getPicoBite` path for spec ids that are themselves Pico-Bites.
-- When `spec.id` matches an `idia_nano_bites.id`, it renders the corresponding container file (via existing `ATOM_FILE_MAP`), which now internally uses `NanoBiteHost`.
-
-## Conflict-resolution rule
-
-- Two Pico-Bites are "in conflict" when they share the same `slot` on the same Nano-Bite.
-- Highest `relationship_weight` wins → rendered normally.
-- Losers with `is_mandatory = true` render at 50% opacity + `pointer-events: none` and show a tooltip "Overridden by <winner>".
-- Losers with `is_mandatory = false` are hidden.
-
-## Hub-side surface (out of scope for this repo, noted)
-
-- IDIA Hub gets a CRUD UI over these three tables via `service_role`. No changes required in IDIA Pay beyond consuming the tables.
-
-## Technical notes
-
-- Migration includes GRANTs + RLS + policy in the required 4-step order.
-- `updated_at` trigger reused (`public.update_updated_at_column`).
-- Types will regenerate after migration approval; only then wire the resolver + refactor containers.
-- No mock/simulation data; seed rows describe real tags already present in the frontend registry.
-
-## Deliverable order
-
-1. Migration (schema + GRANTs + RLS + policies + seed rows for pico-bites, nano-bites, and baseline relations) — one call.
-2. After approval + types regen: `nano-pico-resolver.ts` + `NanoBiteHost.tsx`.
-3. Refactor the 5 container files to render `<NanoBiteHost />` in their content slot.
-4. Verify: typecheck, load `IDIA-FRWD-NEUL`, confirm each of the 5 screens renders DB-driven Pico-Bites and that a manually-lowered weight in Supabase visibly dims the loser without redeploy.
+- Blueprint payload, `nano-pico-resolver`, `PICO_BITE_REGISTRY`, `TelemetryBus`, and any database work. The data path is already correct.

@@ -60,15 +60,15 @@ export default function NanoBiteHost({
 
   return (
     <section className={className}>
-      <header className="flex items-center justify-between mb-2">
-        <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+      <header className="flex items-center justify-between mb-1">
+        <p className="text-[9px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
           {title}
         </p>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-[9px] text-muted-foreground">
           {visible.filter((b) => b.status === "active").length} active
         </span>
       </header>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         {visible.map((b) => (
           <PicoSlot
             key={b.tag}
