@@ -40,6 +40,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import NanoBiteHost from "@/components/nanobites/NanoBiteHost";
 
 // ============================================================================
 // CONSTANTS
