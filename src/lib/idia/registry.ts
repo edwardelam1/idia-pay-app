@@ -4,6 +4,16 @@
 import { ProvisioningEngine } from "@/lib/provisioning-engine";
 
 
+export type BlueprintPicoBite = {
+  tag: string;
+  name: string;
+  slot: string | null;
+  weight: number;
+  mandatory: boolean;
+  source?: string;
+  config?: Record<string, unknown>;
+};
+
 export type NanoBiteSpec = {
   id: string;
   screen: string;
@@ -15,6 +25,8 @@ export type NanoBiteSpec = {
   requiresTier?: string;
   /** Optional per-bite config schema from the Hub blueprint. */
   config?: Record<string, unknown>;
+  /** Inline Pico-Bite dock declared by the Hub (authoritative). */
+  picoBites?: BlueprintPicoBite[];
 };
 
 export type SubModule = {
@@ -55,17 +67,32 @@ function normalizeBundle(bundle: Record<string, unknown>, idx: number): SubModul
   const name = (bundle.name as string) || `Module ${idx + 1}`;
   const vertical = (bundle.vertical as string) || "General";
   const rawBites = (bundle.nanoBites as Array<Record<string, unknown>>) || [];
-  const nanoBites: NanoBiteSpec[] = rawBites.map((nb, i) => ({
-    id: (nb.id as string) || `nb-${i}`,
-    screen: pickScreen(nb),
-    order: i,
-    task: nb.task as string | undefined,
-    microElement: nb.microElement as string | undefined,
-    valueChainStage: nb.valueChainStage as string | undefined,
-    cadence: nb.cadence as string | undefined,
-    requiresTier: nb.requiresTier as string | undefined,
-    config: (nb.config as Record<string, unknown>) ?? undefined,
-  }));
+  const nanoBites: NanoBiteSpec[] = rawBites.map((nb, i) => {
+    const rawPicos = (nb.picoBites as Array<Record<string, unknown>>) || [];
+    const picoBites: BlueprintPicoBite[] = rawPicos
+      .map((p) => ({
+        tag: (p.tag as string) || (p.id as string),
+        name: (p.name as string) ?? "",
+        slot: (p.slot as string) ?? null,
+        weight: typeof p.weight === "number" ? (p.weight as number) : 10,
+        mandatory: Boolean(p.mandatory),
+        source: p.source as string | undefined,
+        config: (p.config as Record<string, unknown>) ?? undefined,
+      }))
+      .filter((p) => Boolean(p.tag));
+    return {
+      id: (nb.id as string) || `nb-${i}`,
+      screen: pickScreen(nb),
+      order: i,
+      task: nb.task as string | undefined,
+      microElement: nb.microElement as string | undefined,
+      valueChainStage: nb.valueChainStage as string | undefined,
+      cadence: nb.cadence as string | undefined,
+      requiresTier: nb.requiresTier as string | undefined,
+      config: (nb.config as Record<string, unknown>) ?? undefined,
+      picoBites: picoBites.length > 0 ? picoBites : undefined,
+    };
+  });
   return {
     id: slugify(`${vertical}-${name}`),
     label: name,

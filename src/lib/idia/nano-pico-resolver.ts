@@ -1,15 +1,26 @@
 /**
- * Nano-Bite ↔ Pico-Bite resolver.
+ * Nano-Bite ↔ Pico-Bite resolver — blueprint-first.
  *
- * Loads the DB-defined relationship matrix for a given Nano-Bite container
- * and produces an ordered layout. Conflicts within the same `slot` are
- * resolved by `relationship_weight` (higher wins). Losers with
- * `is_mandatory=true` are kept as `dimmed`, others are hidden.
+ * The Hub now embeds the authoritative Pico-Bite dock inline in each
+ * `modules.bundles[].nanoBites[].picoBites[]` entry of the hydrated
+ * manifest (`idia_schema_manifest_vault.schema_payload`). This resolver
+ * reads that payload from the cached blueprint (populated by
+ * `ProvisioningEngine.hydrateFromHub`) and applies the same conflict
+ * rules the old DB-driven path used:
+ *   - Highest `weight` per `slot` wins → rendered normally.
+ *   - Losers with `mandatory=true` render dimmed (with "Overridden by …").
+ *   - Losers with `mandatory=false` are hidden.
+ *   - Untagged slots never conflict.
  *
- * Falls back to an empty layout if the fetch fails so the container's
- * bespoke chrome renders normally offline. Results are cached per session.
+ * `gate_policy` and `default_config` come from the flat client
+ * `PICO_BITE_REGISTRY`, so no extra network round-trip is needed to
+ * paint the dock. A legacy `idia_nano_pico_relations` fallback fires
+ * only if the blueprint has no inline dock for a given nano bite AND
+ * a session cache miss — this keeps first-boot before hydration alive.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { ProvisioningEngine } from "@/lib/provisioning-engine";
+import { PICO_BITE_REGISTRY } from "@/components/pico-bites/registry";
 
 export type ResolvedPico = {
   tag: string;
@@ -29,12 +40,20 @@ export type ResolvedLayout = {
 };
 
 const CACHE = new Map<string, ResolvedLayout>();
-const SS_KEY = "idia.nanoPico.layout.v1";
+const SS_KEY = "idia.nanoPico.layout.v2";
 
-function readSession(id: string): ResolvedLayout | null {
+function sessionKey(nanoBiteId: string): string {
+  const code =
+    (typeof window !== "undefined" &&
+      ProvisioningEngine.loadCached()?.provisioningCode) ||
+    "unknown";
+  return `${SS_KEY}:${code}:${nanoBiteId}`;
+}
+
+function readSession(nanoBiteId: string): ResolvedLayout | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(`${SS_KEY}:${id}`);
+    const raw = sessionStorage.getItem(sessionKey(nanoBiteId));
     return raw ? (JSON.parse(raw) as ResolvedLayout) : null;
   } catch {
     return null;
@@ -44,9 +63,125 @@ function readSession(id: string): ResolvedLayout | null {
 function writeSession(layout: ResolvedLayout) {
   if (typeof sessionStorage === "undefined") return;
   try {
-    sessionStorage.setItem(`${SS_KEY}:${layout.nanoBiteId}`, JSON.stringify(layout));
+    sessionStorage.setItem(sessionKey(layout.nanoBiteId), JSON.stringify(layout));
   } catch {
     /* ignore quota */
+  }
+}
+
+type IncomingPico = {
+  tag: string;
+  name: string;
+  slot: string | null;
+  weight: number;
+  mandatory: boolean;
+  config?: Record<string, unknown> | null;
+};
+
+function resolveConflicts(nanoBiteId: string, rows: IncomingPico[]): ResolvedLayout {
+  // Sort by weight desc so first-seen per slot is the winner.
+  const sorted = [...rows].sort((a, b) => b.weight - a.weight);
+
+  const winnerBySlot = new Map<string, { tag: string; weight: number }>();
+  for (const r of sorted) {
+    if (!r.slot) continue;
+    const cur = winnerBySlot.get(r.slot);
+    if (!cur || r.weight > cur.weight) {
+      winnerBySlot.set(r.slot, { tag: r.tag, weight: r.weight });
+    }
+  }
+
+  const bites: ResolvedPico[] = [];
+  for (const r of sorted) {
+    const registryEntry = PICO_BITE_REGISTRY[r.tag];
+    const gate_policy = registryEntry?.gate ?? "shift-lock";
+    const defaultConfig = registryEntry?.defaultConfig ?? {};
+    const slotWinner = r.slot ? winnerBySlot.get(r.slot) : undefined;
+    const isWinner = !r.slot || slotWinner?.tag === r.tag;
+    const merged: ResolvedPico = {
+      tag: r.tag,
+      name: r.name,
+      gate_policy,
+      weight: r.weight,
+      slot: r.slot,
+      mandatory: r.mandatory,
+      status: isWinner ? "active" : "dimmed",
+      overriddenBy: isWinner ? undefined : slotWinner?.tag,
+      config: { ...defaultConfig, ...(r.config ?? {}) },
+    };
+    if (isWinner) {
+      bites.push(merged);
+    } else if (r.mandatory) {
+      bites.push(merged);
+    }
+    // non-mandatory losers hidden
+  }
+  return { nanoBiteId, bites };
+}
+
+function fromBlueprint(nanoBiteId: string): ResolvedLayout | null {
+  const bp = ProvisioningEngine.loadCached();
+  if (!bp) return null;
+  const modules = (bp as unknown as { modules?: Record<string, unknown> }).modules;
+  const bundles = (modules?.bundles as Array<Record<string, unknown>>) ?? [];
+  for (const bundle of bundles) {
+    const bites = (bundle.nanoBites as Array<Record<string, unknown>>) ?? [];
+    const match = bites.find((nb) => (nb.id as string) === nanoBiteId);
+    if (!match) continue;
+    const picos = (match.picoBites as Array<Record<string, unknown>>) ?? [];
+    if (picos.length === 0) return null;
+    const rows: IncomingPico[] = picos.map((p) => ({
+      tag: ((p.tag as string) || (p.id as string)) ?? "",
+      name: (p.name as string) ?? "",
+      slot: (p.slot as string) ?? null,
+      weight: typeof p.weight === "number" ? (p.weight as number) : 10,
+      mandatory: Boolean(p.mandatory),
+      config: (p.config as Record<string, unknown>) ?? null,
+    })).filter((r) => Boolean(r.tag));
+    return resolveConflicts(nanoBiteId, rows);
+  }
+  return null;
+}
+
+async function fromLegacyRelations(nanoBiteId: string): Promise<ResolvedLayout> {
+  const empty: ResolvedLayout = { nanoBiteId, bites: [] };
+  try {
+    const { data, error } = await supabase
+      .from("idia_nano_pico_relations")
+      .select(
+        "relationship_weight, is_mandatory, slot, config_override, idia_pico_bites!inner ( tag, name, default_config )",
+      )
+      .eq("nano_bite_id", nanoBiteId)
+      .order("relationship_weight", { ascending: false });
+    if (error) throw error;
+    if (!data) return empty;
+
+    type Row = {
+      relationship_weight: number;
+      is_mandatory: boolean;
+      slot: string | null;
+      config_override: Record<string, unknown> | null;
+      idia_pico_bites:
+        | { tag: string; name: string; default_config: Record<string, unknown> | null }
+        | Array<{ tag: string; name: string; default_config: Record<string, unknown> | null }>;
+    };
+    const rows: IncomingPico[] = (data as unknown as Row[]).map((r) => {
+      const pico = Array.isArray(r.idia_pico_bites)
+        ? r.idia_pico_bites[0]
+        : r.idia_pico_bites;
+      return {
+        tag: pico.tag,
+        name: pico.name,
+        slot: r.slot,
+        weight: r.relationship_weight,
+        mandatory: r.is_mandatory,
+        config: { ...(pico.default_config ?? {}), ...(r.config_override ?? {}) },
+      };
+    });
+    return resolveConflicts(nanoBiteId, rows);
+  } catch (err) {
+    console.warn("[nano-pico-resolver] legacy fallback failed", err);
+    return empty;
   }
 }
 
@@ -54,103 +189,30 @@ export async function fetchNanoPicoLayout(
   nanoBiteId: string,
 ): Promise<ResolvedLayout> {
   if (CACHE.has(nanoBiteId)) return CACHE.get(nanoBiteId)!;
+
+  const fromBp = fromBlueprint(nanoBiteId);
+  if (fromBp) {
+    console.info(
+      `[nano-pico-resolver] source=blueprint nano=${nanoBiteId} bites=${fromBp.bites.length}`,
+    );
+    CACHE.set(nanoBiteId, fromBp);
+    writeSession(fromBp);
+    return fromBp;
+  }
+
   const cached = readSession(nanoBiteId);
   if (cached) {
     CACHE.set(nanoBiteId, cached);
     return cached;
   }
 
-  const empty: ResolvedLayout = { nanoBiteId, bites: [] };
-
-  try {
-    const { data, error } = await supabase
-      .from("idia_nano_pico_relations")
-      .select(
-        "relationship_weight, is_mandatory, slot, config_override, idia_pico_bites!inner ( tag, name, gate_policy, default_config )",
-      )
-      .eq("nano_bite_id", nanoBiteId)
-      .order("relationship_weight", { ascending: false });
-
-    if (error) throw error;
-    if (!data) {
-      CACHE.set(nanoBiteId, empty);
-      return empty;
-    }
-
-    // Normalize (supabase !inner select yields an object here).
-    type Row = {
-      relationship_weight: number;
-      is_mandatory: boolean;
-      slot: string | null;
-      config_override: Record<string, unknown> | null;
-      idia_pico_bites:
-        | {
-            tag: string;
-            name: string;
-            gate_policy: "none" | "shift-lock";
-            default_config: Record<string, unknown> | null;
-          }
-        | Array<{
-            tag: string;
-            name: string;
-            gate_policy: "none" | "shift-lock";
-            default_config: Record<string, unknown> | null;
-          }>;
-    };
-
-    const rows = (data as unknown as Row[]).map((r) => {
-      const pico = Array.isArray(r.idia_pico_bites)
-        ? r.idia_pico_bites[0]
-        : r.idia_pico_bites;
-      return {
-        tag: pico.tag,
-        name: pico.name,
-        gate_policy: pico.gate_policy,
-        weight: r.relationship_weight,
-        slot: r.slot,
-        mandatory: r.is_mandatory,
-        config: {
-          ...(pico.default_config ?? {}),
-          ...(r.config_override ?? {}),
-        } as Record<string, unknown>,
-      };
-    });
-
-    // Conflict resolution per slot. Untagged slots never conflict.
-    const winnerBySlot = new Map<string, { tag: string; weight: number }>();
-    for (const r of rows) {
-      if (!r.slot) continue;
-      const cur = winnerBySlot.get(r.slot);
-      if (!cur || r.weight > cur.weight) {
-        winnerBySlot.set(r.slot, { tag: r.tag, weight: r.weight });
-      }
-    }
-
-    const bites: ResolvedPico[] = [];
-    for (const r of rows) {
-      const slotWinner = r.slot ? winnerBySlot.get(r.slot) : undefined;
-      const isWinner = !r.slot || slotWinner?.tag === r.tag;
-      if (isWinner) {
-        bites.push({ ...r, status: "active" });
-      } else if (r.mandatory) {
-        bites.push({
-          ...r,
-          status: "dimmed",
-          overriddenBy: slotWinner?.tag,
-        });
-      }
-      // non-mandatory losers are hidden
-    }
-
-    const layout: ResolvedLayout = { nanoBiteId, bites };
-    CACHE.set(nanoBiteId, layout);
-    writeSession(layout);
-    return layout;
-  } catch (err) {
-    console.warn("[nano-pico-resolver] fetch failed", err);
-    CACHE.set(nanoBiteId, empty);
-    return empty;
-  }
+  console.info(
+    `[nano-pico-resolver] source=legacy-relations nano=${nanoBiteId}`,
+  );
+  const legacy = await fromLegacyRelations(nanoBiteId);
+  CACHE.set(nanoBiteId, legacy);
+  writeSession(legacy);
+  return legacy;
 }
 
 export function clearNanoPicoCache() {
