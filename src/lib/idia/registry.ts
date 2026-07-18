@@ -4,6 +4,16 @@
 import { ProvisioningEngine } from "@/lib/provisioning-engine";
 
 
+export type BlueprintPicoBite = {
+  tag: string;
+  name: string;
+  slot: string | null;
+  weight: number;
+  mandatory: boolean;
+  source?: string;
+  config?: Record<string, unknown>;
+};
+
 export type NanoBiteSpec = {
   id: string;
   screen: string;
@@ -15,6 +25,8 @@ export type NanoBiteSpec = {
   requiresTier?: string;
   /** Optional per-bite config schema from the Hub blueprint. */
   config?: Record<string, unknown>;
+  /** Inline Pico-Bite dock declared by the Hub (authoritative). */
+  picoBites?: BlueprintPicoBite[];
 };
 
 export type SubModule = {
