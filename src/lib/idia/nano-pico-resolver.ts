@@ -18,7 +18,6 @@
  * only if the blueprint has no inline dock for a given nano bite AND
  * a session cache miss — this keeps first-boot before hydration alive.
  */
-import { supabase } from "@/integrations/supabase/client";
 import { ProvisioningEngine } from "@/lib/provisioning-engine";
 import { PICO_BITE_REGISTRY } from "@/components/pico-bites/registry";
 
