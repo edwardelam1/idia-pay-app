@@ -73,8 +73,16 @@ export default function NanoBiteHost({
           <PicoSlot
             key={b.tag}
             bite={b}
-            shiftLocked={!shift.satisfied}
-            shiftReason={shift.reason}
+            shiftLocked={!shift.ready}
+            shiftReason={
+              !shift.location
+                ? "Set service location"
+                : !shift.clockedIn
+                  ? "Clock in to unlock"
+                  : shift.drifted
+                    ? "Location drift detected"
+                    : undefined
+            }
             onEmit={(payload) =>
               TelemetryBus.emit({
                 telemetryTag: b.tag,
