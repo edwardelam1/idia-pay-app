@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { LiquidOSErrorBoundary } from "@/lib/error-boundary";
 import { logPlanck } from "@/lib/error-capture";
 import { useActiveBusinessId } from "@/lib/idia/ActiveBusinessContext";
+import NanoBiteHost from "@/components/nanobites/NanoBiteHost";
 
 // ============================================================================
 // SCHEMA — UUID `id` is authoritative
