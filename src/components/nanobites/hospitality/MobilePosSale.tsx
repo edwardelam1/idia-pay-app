@@ -37,6 +37,7 @@ import { logPlanck } from "@/lib/error-capture";
 import { LiquidOSErrorBoundary } from "@/lib/error-boundary";
 import { useActiveBusinessId } from "@/lib/idia/ActiveBusinessContext";
 import { useHardwareFrame } from "@/lib/idia/useHardwareFrame";
+import NanoBiteHost from "@/components/nanobites/NanoBiteHost";
 
 // ============================================================================
 // STRICT DATA SCHEMAS
