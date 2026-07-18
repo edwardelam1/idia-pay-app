@@ -543,6 +543,7 @@ export default function DailyPrepList({ businessId = "default" }: { businessId?:
           </div>
         </div>
       )}
+      <NanoBiteHost nanoBiteId="hosp.ft.ops.prep" className="px-4 py-3 bg-white/80 border-t" />
     </div>
   );
 }
