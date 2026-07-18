@@ -14,6 +14,7 @@ import {
   type ExecutionRecord,
 } from "@/lib/idia/executions";
 import { getPicoBite, type GatePolicy } from "@/components/pico-bites/registry";
+import NanoBiteHost from "@/components/nanobites/NanoBiteHost";
 import { TelemetryBus } from "@/lib/idia/telemetry-bus";
 import { useShiftLock } from "@/components/pico-bites/primitives";
 
@@ -31,15 +32,9 @@ import Flip3DSwitcher from "@/components/liquidos/Flip3DSwitcher";
 const rawAtoms = import.meta.glob("/src/components/nanobites/**/*.tsx", { eager: true });
 
 const ATOM_FILE_MAP: Record<string, string> = {
-  // Pre-pivot hospitality bites still served by legacy atoms.
-  "hosp.ft.ops.service_loc": "ServiceLocation",
-  "hosp.ft.ops.prep": "DailyPrepList",
-  "hosp.ft.sales.mobile_pos": "MobilePosSale",
-  "hosp.ft.infra.health": "HealthPermitLog",
-  "hosp.ft.ops.restock": "CommissaryRestock",
+  // Only non-blueprint legacy atoms stay here. Canonical food-truck nano-bites
+  // render from their Hub-published inline Pico-Bite dock below.
   "hosp.ft.ops.tva.variance": "TvAVarianceManager",
-  // The 20 Food-Truck Pico-Bites now live in the flat pico-bites/ registry
-  // and are resolved by NanoBiteRenderer before this map is consulted.
 };
 
 type Phase =
@@ -452,7 +447,25 @@ function NanoBiteRenderer({
     );
   }
 
-  // 2) LEGACY ATOM MAP — for pre-pivot bites (non-Pico components).
+  // 2) BLUEPRINT INLINE PICO-BITE DOCK — authoritative Hub composition for
+  // canonical Nano-Bite containers. This replaces the old hardcoded atoms.
+  if (spec.picoBites?.length) {
+    return (
+      <SovereignWrapper id={spec.id}>
+        <ActiveBusinessProvider
+          businessId={tenantId}
+          provisioningCode={carton.provisioningCode}
+        >
+          <BlueprintNanoBiteSurface
+            spec={spec}
+            cartonCode={carton.provisioningCode}
+          />
+        </ActiveBusinessProvider>
+      </SovereignWrapper>
+    );
+  }
+
+  // 3) LEGACY ATOM MAP — for explicitly retained pre-pivot bites only.
   let Component: React.ComponentType<{ businessId?: string }> | null = null;
   const expectedFileName = ATOM_FILE_MAP[spec.id];
   if (expectedFileName) {
@@ -475,7 +488,7 @@ function NanoBiteRenderer({
     );
   }
 
-  // 3) DYNAMIC FALLBACK — unrecognized bites.
+  // 4) DYNAMIC FALLBACK — unrecognized bites.
   return (
     <DynamicNanoBite
       spec={spec}
@@ -483,6 +496,43 @@ function NanoBiteRenderer({
       subModuleId={subModule.id}
       cartonCode={carton.provisioningCode}
     />
+  );
+}
+
+function BlueprintNanoBiteSurface({
+  spec,
+  cartonCode,
+}: {
+  spec: NanoBiteSpec;
+  cartonCode: string;
+}) {
+  const publishedCount = spec.picoBites?.length ?? 0;
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
+      <header className="shrink-0 border-b border-border bg-card/90 px-3 py-2 backdrop-blur">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {spec.screen}
+        </p>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h2 className="min-w-0 truncate text-[15px] font-semibold leading-tight text-foreground">
+            {prettyTitle(spec)}
+          </h2>
+          <span className="shrink-0 rounded-full border border-border bg-secondary px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {publishedCount} Pico{publishedCount === 1 ? "" : "s"}
+          </span>
+        </div>
+      </header>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
+        <NanoBiteHost
+          nanoBiteId={spec.id}
+          cartonCode={cartonCode}
+          title="Pico-Bites"
+          className="min-h-full"
+        />
+      </div>
+    </div>
   );
 }
 
