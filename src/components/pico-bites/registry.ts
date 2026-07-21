@@ -1,170 +1,165 @@
 /**
- * Flat Pico-Bite registry — structural only.
+ * Universal Pico-Bite registry — structural only.
  * Maps blueprint telemetry tag → component + gate policy. All business data
- * (item catalogs, locations, menus, employees, tickets) comes from the Hub
- * blueprint config or from operator-managed tables at runtime. There is NO
- * mock or seed data in this file.
+ * (item catalogs, tender amounts, routes, symptoms, tiles, employees, etc.)
+ * comes from the Hub blueprint config. There is NO mock or seed data here.
+ *
+ * Naming convention: `pico.<category>.<intent>`.
  */
 import type { ComponentType } from "react";
 import type { PicoBiteProps } from "@/lib/idia/pico-bite";
+
 import {
-  QuickFireItemAdd,
-  ModifierApplication,
-  KdsTicketRouting,
-  RapidCompVoid,
-  HoldSendStay,
-  CourseAssignment,
-  OrderPacingTimer,
-  OrderTypeChange,
-  ReopenCheck,
-  ReprintChit,
-} from "./pos";
+  PinPadPicoBite, NumpadPicoBite, SignaturePadPicoBite, KeyboardPicoBite,
+  BarcodeScanPicoBite, QrScanPicoBite, NfcTapPicoBite, MagStripePicoBite,
+  ChipInsertPicoBite, CameraCapturePicoBite, VoiceCommandPicoBite,
+  WeightScalePicoBite, IdScanPicoBite, FingerprintPicoBite, FaceScanPicoBite,
+} from "./universal/input";
 import {
-  KdsBoard,
-  KdsAllDayView,
-  KdsRecall,
-  KdsDeviceSetup,
-  KdsFireTicket,
-} from "./kds";
+  ReceiptPrinterPicoBite, KitchenPrinterPicoBite, LabelPrinterPicoBite,
+  CashDrawerPicoBite, BuzzerPicoBite, HapticPulsePicoBite,
+  IndicatorLightPicoBite, AlarmBellPicoBite, RelaySwitchPicoBite,
+  RfidWritePicoBite, EmailBlastPicoBite, SmsBlastPicoBite, PushNotifyPicoBite,
+} from "./universal/output";
 import {
-  LongPress86ing,
-  RecipeDepletion,
-  LogWasteSpoilage,
-  RestockReceive,
-  PhysicalCount,
-  Timed86,
-} from "./inventory";
+  ItemGridPicoBite, CartPanePicoBite, SummaryBarPicoBite, OrderTicketPicoBite,
+  TableMapPicoBite, NotificationBarPicoBite, CountdownTimerPicoBite,
+  ModifierGridPicoBite, RoleBadgePicoBite, PriceDisplayPicoBite,
+} from "./universal/display";
 import {
-  ContactlessTap,
-  OfflineFallback,
-  CloudReSync,
-  DrawerState,
-  SplitEven,
-  SplitByItem,
-  TipAndClose,
-  AdjustPayment,
-  CashTender,
-  Refund,
-  ReprintReceipt,
-  GiftCardSell,
-  GiftCardRedeem,
-  DiscountApply,
-} from "./payment";
+  ManagerOverridePicoBite, AgeVerifyPicoBite, IdCheckPicoBite,
+  HipaaGatePicoBite, ConsentCheckboxPicoBite, RefundReasonPicoBite,
+  VoidReasonPicoBite, DiscountAuthPicoBite,
+} from "./universal/compliance";
 import {
-  GpsCheckIn,
-  TimePunch,
-  MidShiftDrop,
-  ShiftReview,
-  CashPayout,
-  DepositEnvelope,
-} from "./fleet";
+  LoyaltyScanPicoBite, RewardRedeemPicoBite, PointsBalancePicoBite,
+  GiftCardSwipePicoBite, CashTenderPicoBite, CardTenderPicoBite,
+  WalletTenderPicoBite, SplitCheckPicoBite, TipPromptPicoBite,
+  RefundInitPicoBite, SettlementBatchPicoBite, CryptoPayPicoBite,
+} from "./universal/loyalty-payment";
 import {
-  ViewPmix,
-  LaborVsSales,
-  LocationCompare,
-  LedgerExport,
-} from "./analytics";
+  SkuLookupPicoBite, CycleCountInputPicoBite, StockAdjustPicoBite,
+  TemperatureLogPicoBite, ExpirationFlagPicoBite, CustomerLookupPicoBite,
+  GuestNotePicoBite, ShiftPunchPicoBite, AuditTrailPicoBite,
+} from "./universal/ops-crm";
 import {
-  FloorPlan,
-  TableTimer,
-  SeatAssignment,
-  PartySize,
-  TableTransfer,
-} from "./tables";
-import { GuestLookup, LoyaltyScan, EmailReceipt, GuestSave, GuestNotes } from "./customer";
-import { BreakPunch, MySalesAndTips, TableHandoff, EmployeeBroadcast } from "./self";
+  BookSlotPicoBite, RescheduleFlowPicoBite, CheckInPicoBite, GpsPingPicoBite,
+  RouteMapPicoBite, VehicleStatusPicoBite, VitalCapturePicoBite,
+  SymptomInputPicoBite, IoTSensorPicoBite, EnergyMeterPicoBite,
+} from "./universal/schedule-fleet-health";
+import {
+  OfflineQueuePicoBite, GeoFencePicoBite, DwellTimerPicoBite,
+  ProvenanceStampPicoBite, FeatureFlagPicoBite, RuleGatePicoBite,
+} from "./universal/logic";
 
 export type GatePolicy = "none" | "shift-lock";
 
 export type PicoBiteEntry = {
   component: ComponentType<PicoBiteProps<any, any>>;
-  defaultConfig: Record<string, unknown>;
   gate: GatePolicy;
 };
 
-// Structural defaults only — numeric thresholds/percentages the terminal needs
-// to render controls. No sample menu items, ingredients, locations, tickets,
-// employees, or messages. Everything else flows from the Hub blueprint config.
+const g = (component: ComponentType<PicoBiteProps<any, any>>, gate: GatePolicy = "none"): PicoBiteEntry => ({ component, gate });
+
 export const PICO_BITE_REGISTRY: Record<string, PicoBiteEntry> = {
-  // POS
-  "hosp.ft.pos.item_add": { component: QuickFireItemAdd, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pos.mod_apply": { component: ModifierApplication, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pos.kds_fire": { component: KdsFireTicket, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pos.void_comp": { component: RapidCompVoid, gate: "shift-lock", defaultConfig: {} },
+  // --- Input
+  "pico.input.pin_pad":        g(PinPadPicoBite),
+  "pico.input.numpad":         g(NumpadPicoBite),
+  "pico.input.signature":      g(SignaturePadPicoBite),
+  "pico.input.keyboard":       g(KeyboardPicoBite),
+  "pico.input.barcode":        g(BarcodeScanPicoBite),
+  "pico.input.qr":             g(QrScanPicoBite),
+  "pico.input.nfc":            g(NfcTapPicoBite),
+  "pico.input.mag_stripe":     g(MagStripePicoBite, "shift-lock"),
+  "pico.input.chip_insert":    g(ChipInsertPicoBite, "shift-lock"),
+  "pico.input.camera":         g(CameraCapturePicoBite),
+  "pico.input.voice":          g(VoiceCommandPicoBite),
+  "pico.input.scale":          g(WeightScalePicoBite),
+  "pico.input.id_scan":        g(IdScanPicoBite),
+  "pico.input.fingerprint":    g(FingerprintPicoBite),
+  "pico.input.face":           g(FaceScanPicoBite),
 
-  // Inventory (all read the operator-managed daily_prep_list catalog)
-  "hosp.ft.inv.status_86": { component: LongPress86ing, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.inv.deplete_recipe": { component: RecipeDepletion, gate: "none", defaultConfig: {} },
-  "hosp.ft.inv.log_waste": { component: LogWasteSpoilage, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.inv.receive_stock": { component: RestockReceive, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.inv.cycle_count": { component: PhysicalCount, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.inv.timed_86": { component: Timed86, gate: "shift-lock", defaultConfig: {} },
+  // --- Output / Peripherals
+  "pico.output.receipt":         g(ReceiptPrinterPicoBite, "shift-lock"),
+  "pico.output.kitchen_ticket":  g(KitchenPrinterPicoBite, "shift-lock"),
+  "pico.output.label":           g(LabelPrinterPicoBite, "shift-lock"),
+  "pico.output.cash_drawer":     g(CashDrawerPicoBite, "shift-lock"),
+  "pico.output.buzzer":          g(BuzzerPicoBite),
+  "pico.output.haptic":          g(HapticPulsePicoBite),
+  "pico.output.indicator_light": g(IndicatorLightPicoBite),
+  "pico.output.alarm":           g(AlarmBellPicoBite),
+  "pico.output.relay":           g(RelaySwitchPicoBite),
+  "pico.output.rfid_write":      g(RfidWritePicoBite, "shift-lock"),
+  "pico.output.email":           g(EmailBlastPicoBite),
+  "pico.output.sms":             g(SmsBlastPicoBite),
+  "pico.output.push":            g(PushNotifyPicoBite),
 
-  // Payment
-  "hosp.ft.pay.init_nfc": { component: ContactlessTap, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.offline_auth": { component: OfflineFallback, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.batch_sync": { component: CloudReSync, gate: "none", defaultConfig: {} },
-  "hosp.ft.pay.drawer_state": { component: DrawerState, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.split_even": { component: SplitEven, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.split_item": { component: SplitByItem, gate: "shift-lock", defaultConfig: { checkCount: 2 } },
-  "hosp.ft.pay.tip_close": { component: TipAndClose, gate: "shift-lock", defaultConfig: { presets: [0.15, 0.18, 0.2, 0.25] } },
-  "hosp.ft.pay.adjust": { component: AdjustPayment, gate: "shift-lock", defaultConfig: { threshold: 5 } },
-  "hosp.ft.pay.cash_tender": { component: CashTender, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.drawer_count_open": { component: DrawerState, gate: "none", defaultConfig: { mode: "open_count" } },
-  "hosp.ft.pay.drawer_count_close": { component: DrawerState, gate: "shift-lock", defaultConfig: { mode: "close_count" } },
-  "hosp.ft.pay.refund": { component: Refund, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.reprint_receipt": { component: ReprintReceipt, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.gc_sell": { component: GiftCardSell, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.gc_redeem": { component: GiftCardRedeem, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pay.discount_apply": { component: DiscountApply, gate: "shift-lock", defaultConfig: { threshold: 15 } },
+  // --- Display / UI structure
+  "pico.display.item_grid":       g(ItemGridPicoBite, "shift-lock"),
+  "pico.display.cart_pane":       g(CartPanePicoBite, "shift-lock"),
+  "pico.display.summary_bar":     g(SummaryBarPicoBite),
+  "pico.display.order_ticket":    g(OrderTicketPicoBite),
+  "pico.display.table_map":       g(TableMapPicoBite, "shift-lock"),
+  "pico.display.notification":    g(NotificationBarPicoBite),
+  "pico.display.countdown":       g(CountdownTimerPicoBite),
+  "pico.display.modifier_grid":   g(ModifierGridPicoBite, "shift-lock"),
+  "pico.display.role_badge":      g(RoleBadgePicoBite),
+  "pico.display.price":           g(PriceDisplayPicoBite),
 
-  // Fleet
-  "hosp.ft.fleet.loc_lock": { component: GpsCheckIn, gate: "none", defaultConfig: {} },
-  "hosp.ft.fleet.time_punch": { component: TimePunch, gate: "none", defaultConfig: {} },
-  "hosp.ft.fleet.cash_drop": { component: MidShiftDrop, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.fleet.shift_review": { component: ShiftReview, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.fleet.pay_out": { component: CashPayout, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.fleet.deposit": { component: DepositEnvelope, gate: "shift-lock", defaultConfig: {} },
+  // --- Compliance / Auth
+  "pico.compliance.manager_override": g(ManagerOverridePicoBite),
+  "pico.compliance.age_verify":       g(AgeVerifyPicoBite, "shift-lock"),
+  "pico.compliance.id_check":         g(IdCheckPicoBite, "shift-lock"),
+  "pico.compliance.hipaa_gate":       g(HipaaGatePicoBite),
+  "pico.compliance.consent":          g(ConsentCheckboxPicoBite),
+  "pico.compliance.refund_reason":    g(RefundReasonPicoBite, "shift-lock"),
+  "pico.compliance.void_reason":      g(VoidReasonPicoBite, "shift-lock"),
+  "pico.compliance.discount_auth":    g(DiscountAuthPicoBite, "shift-lock"),
 
-  // Analytics
-  "hosp.ft.rpt.view_pmix": { component: ViewPmix, gate: "none", defaultConfig: {} },
-  "hosp.ft.rpt.view_labor_sales": { component: LaborVsSales, gate: "none", defaultConfig: {} },
-  "hosp.ft.rpt.loc_compare": { component: LocationCompare, gate: "none", defaultConfig: {} },
-  "hosp.ft.rpt.export_ledger": { component: LedgerExport, gate: "none", defaultConfig: {} },
+  // --- Loyalty & Payment
+  "pico.loyalty.scan":         g(LoyaltyScanPicoBite),
+  "pico.loyalty.redeem":       g(RewardRedeemPicoBite, "shift-lock"),
+  "pico.loyalty.points":       g(PointsBalancePicoBite),
+  "pico.payment.gift_swipe":   g(GiftCardSwipePicoBite, "shift-lock"),
+  "pico.payment.cash_tender":  g(CashTenderPicoBite, "shift-lock"),
+  "pico.payment.card_tender":  g(CardTenderPicoBite, "shift-lock"),
+  "pico.payment.wallet_tender":g(WalletTenderPicoBite, "shift-lock"),
+  "pico.payment.split_check":  g(SplitCheckPicoBite, "shift-lock"),
+  "pico.payment.tip":          g(TipPromptPicoBite, "shift-lock"),
+  "pico.payment.refund_init":  g(RefundInitPicoBite, "shift-lock"),
+  "pico.payment.settlement":   g(SettlementBatchPicoBite, "shift-lock"),
+  "pico.payment.crypto":       g(CryptoPayPicoBite, "shift-lock"),
 
-  // POS · extended order management
-  "hosp.ft.pos.hold_send_stay": { component: HoldSendStay, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pos.course_assign": { component: CourseAssignment, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pos.order_pace": { component: OrderPacingTimer, gate: "shift-lock", defaultConfig: { thresholdSec: 300 } },
-  "hosp.ft.pos.order_type": { component: OrderTypeChange, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pos.reopen_check": { component: ReopenCheck, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.pos.reprint_chit": { component: ReprintChit, gate: "shift-lock", defaultConfig: {} },
+  // --- Ops & CRM
+  "pico.ops.sku_lookup":         g(SkuLookupPicoBite),
+  "pico.ops.cycle_count_input":  g(CycleCountInputPicoBite, "shift-lock"),
+  "pico.ops.stock_adjust":       g(StockAdjustPicoBite, "shift-lock"),
+  "pico.ops.temp_log":           g(TemperatureLogPicoBite, "shift-lock"),
+  "pico.ops.expiration_flag":    g(ExpirationFlagPicoBite, "shift-lock"),
+  "pico.ops.shift_punch":        g(ShiftPunchPicoBite),
+  "pico.ops.audit_trail":        g(AuditTrailPicoBite),
+  "pico.crm.lookup":             g(CustomerLookupPicoBite),
+  "pico.crm.guest_note":         g(GuestNotePicoBite),
 
-  // Tables
-  "hosp.ft.tbl.floor_plan": { component: FloorPlan, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.tbl.timer": { component: TableTimer, gate: "shift-lock", defaultConfig: { thresholdSec: 1800 } },
-  "hosp.ft.tbl.seat_assign": { component: SeatAssignment, gate: "shift-lock", defaultConfig: { partySize: 4 } },
-  "hosp.ft.tbl.party_size": { component: PartySize, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.tbl.transfer": { component: TableTransfer, gate: "shift-lock", defaultConfig: {} },
+  // --- Schedule / Fleet / Health / IoT
+  "pico.schedule.book_slot":     g(BookSlotPicoBite),
+  "pico.schedule.reschedule":    g(RescheduleFlowPicoBite),
+  "pico.schedule.check_in":      g(CheckInPicoBite),
+  "pico.fleet.gps_ping":         g(GpsPingPicoBite),
+  "pico.fleet.route_map":        g(RouteMapPicoBite),
+  "pico.fleet.vehicle_status":   g(VehicleStatusPicoBite),
+  "pico.health.vital":           g(VitalCapturePicoBite),
+  "pico.health.symptom":         g(SymptomInputPicoBite),
+  "pico.iot.sensor":             g(IoTSensorPicoBite),
+  "pico.iot.energy":             g(EnergyMeterPicoBite),
 
-  // Customer
-  "hosp.ft.cust.lookup": { component: GuestLookup, gate: "none", defaultConfig: {} },
-  "hosp.ft.cust.loyalty": { component: LoyaltyScan, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.cust.email_receipt": { component: EmailReceipt, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.cust.save": { component: GuestSave, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.cust.notes": { component: GuestNotes, gate: "shift-lock", defaultConfig: {} },
-
-  // Self
-  "hosp.ft.self.break": { component: BreakPunch, gate: "none", defaultConfig: {} },
-  "hosp.ft.self.sales_tips": { component: MySalesAndTips, gate: "none", defaultConfig: {} },
-  "hosp.ft.self.handoff": { component: TableHandoff, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.self.broadcast": { component: EmployeeBroadcast, gate: "none", defaultConfig: {} },
-
-  // KDS
-  "hosp.ft.kds.board": { component: KdsBoard, gate: "none", defaultConfig: {} },
-  "hosp.ft.kds.all_day": { component: KdsAllDayView, gate: "none", defaultConfig: {} },
-  "hosp.ft.kds.recall": { component: KdsRecall, gate: "shift-lock", defaultConfig: {} },
-  "hosp.ft.kds.device_setup": { component: KdsDeviceSetup, gate: "none", defaultConfig: {} },
+  // --- Logic / Ambient
+  "pico.logic.offline_queue": g(OfflineQueuePicoBite),
+  "pico.logic.geofence":      g(GeoFencePicoBite),
+  "pico.logic.dwell":         g(DwellTimerPicoBite),
+  "pico.logic.provenance":    g(ProvenanceStampPicoBite),
+  "pico.logic.feature_flag":  g(FeatureFlagPicoBite),
+  "pico.logic.rule_gate":     g(RuleGatePicoBite),
 };
 
 export function getPicoBite(tag: string): PicoBiteEntry | null {
