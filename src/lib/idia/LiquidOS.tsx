@@ -554,7 +554,7 @@ function PicoBiteHost({
   const shift = useShiftLock();
   const gate = resolveGate(entry.gate, shift);
   const Component = entry.component;
-  const config = { ...entry.defaultConfig, ...(spec.config ?? {}) };
+  const config = spec.config ?? {};
 
   return (
     <Component
@@ -562,9 +562,9 @@ function PicoBiteHost({
       config={config}
       gateSatisfied={gate.satisfied}
       gateReason={gate.reason}
-      onAction={(payload: unknown) => {
+      onAction={(tag: string, payload: unknown) => {
         TelemetryBus.emit({
-          telemetryTag: spec.id,
+          telemetryTag: tag,
           picoBite: Component.displayName ?? Component.name ?? spec.id,
           cartonCode: carton.provisioningCode,
           businessId,

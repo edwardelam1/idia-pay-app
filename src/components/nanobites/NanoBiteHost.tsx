@@ -83,9 +83,9 @@ export default function NanoBiteHost({
                     ? "Location drift detected"
                     : undefined
             }
-            onEmit={(payload) =>
+            onEmit={(tag, payload) =>
               TelemetryBus.emit({
-                telemetryTag: b.tag,
+                telemetryTag: tag,
                 picoBite: b.name,
                 cartonCode,
                 businessId,
@@ -111,7 +111,7 @@ function PicoSlot({
   bite: ResolvedPico;
   shiftLocked: boolean;
   shiftReason?: string;
-  onEmit: (payload: unknown) => void;
+  onEmit: (tag: string, payload: unknown) => void;
 }) {
   const entry = getPicoBite(bite.tag);
   if (!entry) return null;

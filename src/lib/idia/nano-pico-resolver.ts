@@ -94,7 +94,6 @@ function resolveConflicts(nanoBiteId: string, rows: IncomingPico[]): ResolvedLay
   for (const r of sorted) {
     const registryEntry = PICO_BITE_REGISTRY[r.tag];
     const gate_policy = registryEntry?.gate ?? "shift-lock";
-    const defaultConfig = registryEntry?.defaultConfig ?? {};
     const slotWinner = r.slot ? winnerBySlot.get(r.slot) : undefined;
     const isWinner = !r.slot || slotWinner?.tag === r.tag;
     const merged: ResolvedPico = {
@@ -106,7 +105,7 @@ function resolveConflicts(nanoBiteId: string, rows: IncomingPico[]): ResolvedLay
       mandatory: r.mandatory,
       status: isWinner ? "active" : "dimmed",
       overriddenBy: isWinner ? undefined : slotWinner?.tag,
-      config: { ...defaultConfig, ...(r.config ?? {}) },
+      config: r.config ?? {},
     };
     if (isWinner) {
       bites.push(merged);
