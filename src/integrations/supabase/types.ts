@@ -1292,6 +1292,39 @@ export type Database = {
         }
         Relationships: []
       }
+      consent_registry: {
+        Row: {
+          aca_hash_key: string | null
+          consent_type: string
+          created_at: string
+          decision: string
+          document_version: string
+          id: string
+          payload: Json
+          user_id: string
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          consent_type: string
+          created_at?: string
+          decision: string
+          document_version: string
+          id?: string
+          payload?: Json
+          user_id: string
+        }
+        Update: {
+          aca_hash_key?: string | null
+          consent_type?: string
+          created_at?: string
+          decision?: string
+          document_version?: string
+          id?: string
+          payload?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       creator_profiles: {
         Row: {
           created_at: string | null
@@ -4088,6 +4121,92 @@ export type Database = {
           severity?: string
           title?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      idia_nano_pico_relations: {
+        Row: {
+          created_at: string
+          id: string
+          is_mandatory: boolean
+          nano_bite_id: string
+          pico_bite_id: string
+          relationship_weight: number
+          slot: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_mandatory?: boolean
+          nano_bite_id: string
+          pico_bite_id: string
+          relationship_weight?: number
+          slot?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_mandatory?: boolean
+          nano_bite_id?: string
+          pico_bite_id?: string
+          relationship_weight?: number
+          slot?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idia_nano_pico_relations_pico_bite_id_fkey"
+            columns: ["pico_bite_id"]
+            isOneToOne: false
+            referencedRelation: "idia_pico_bites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      idia_pico_bites: {
+        Row: {
+          category: string
+          created_at: string
+          default_slot: string | null
+          description: string | null
+          gate_policy: Json | null
+          id: string
+          is_active: boolean
+          name: string
+          tag: string
+          ui_component: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          default_slot?: string | null
+          description?: string | null
+          gate_policy?: Json | null
+          id?: string
+          is_active?: boolean
+          name: string
+          tag: string
+          ui_component?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          default_slot?: string | null
+          description?: string | null
+          gate_policy?: Json | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          tag?: string
+          ui_component?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
