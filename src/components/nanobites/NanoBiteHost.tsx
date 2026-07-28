@@ -111,6 +111,8 @@ export default function NanoBiteHost({
   );
 }
 
+const warned = new Set<string>();
+
 function PicoSlot({
   bite,
   shiftLocked,
@@ -123,7 +125,18 @@ function PicoSlot({
   onEmit: (tag: string, payload: unknown) => void;
 }) {
   const entry = getPicoBite(bite.tag);
-  if (!entry) return null;
+  if (!entry) {
+    if (!warned.has(bite.tag)) {
+      warned.add(bite.tag);
+      console.warn(`[NanoBiteHost] no component registered for tag "${bite.tag}"`);
+    }
+    return (
+      <div className="min-h-[3.5rem] flex flex-col items-center justify-center bg-slate-950 border border-dashed border-slate-800 text-slate-600 p-2 text-center">
+        <span className="text-[9px] font-bold uppercase tracking-widest">Unmapped</span>
+        <span className="text-[9px] font-mono truncate max-w-full">{bite.tag}</span>
+      </div>
+    );
+  }
 
   const gated = bite.gate_policy === "shift-lock" && shiftLocked;
   const dimmed = bite.status === "dimmed";
