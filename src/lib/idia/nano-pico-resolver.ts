@@ -19,7 +19,11 @@
  * a session cache miss — this keeps first-boot before hydration alive.
  */
 import { ProvisioningEngine } from "@/lib/provisioning-engine";
-import { PICO_BITE_REGISTRY } from "@/components/pico-bites/registry";
+import {
+  PICO_BITE_REGISTRY,
+  canonicalPicoTag,
+} from "@/components/pico-bites/registry";
+import { loadPicoCatalog, type PicoCatalogEntry } from "@/lib/idia/pico-catalog";
 
 export type ResolvedPico = {
   tag: string;
@@ -39,7 +43,7 @@ export type ResolvedLayout = {
 };
 
 const CACHE = new Map<string, ResolvedLayout>();
-const SS_KEY = "idia.nanoPico.layout.v2";
+const SS_KEY = "idia.nanoPico.layout.v3";
 
 function sessionKey(nanoBiteId: string): string {
   const code =
@@ -166,7 +170,7 @@ export async function fetchNanoPicoLayout(
 ): Promise<ResolvedLayout> {
   if (CACHE.has(nanoBiteId)) return CACHE.get(nanoBiteId)!;
 
-  const fromBp = fromBlueprint(nanoBiteId);
+  const fromBp = await fromBlueprint(nanoBiteId);
   if (fromBp) {
     console.info(
       `[nano-pico-resolver] source=blueprint nano=${nanoBiteId} bites=${fromBp.bites.length}`,
