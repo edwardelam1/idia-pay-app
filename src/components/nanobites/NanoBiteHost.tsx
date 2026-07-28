@@ -56,7 +56,16 @@ export default function NanoBiteHost({
     );
   }
 
-  if (visible.length === 0) return null;
+  if (visible.length === 0) {
+    return (
+      <section className={className}>
+        <p className="text-[9px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          No Pico-Bites published for {nanoBiteId}
+        </p>
+      </section>
+    );
+  }
+
 
   return (
     <section className={className}>
