@@ -2,8 +2,11 @@
 // Returns PII (first_name, last_name, full_name, display_name, email) for the
 // authenticated caller, sourced from auth.users user_metadata. Non-fatal for
 // the client — TenancyProvider treats a failure here as a soft stall.
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+//
+// NOTE: no supabase-js client is constructed here on purpose. Legacy JWT keys
+// are disabled on this project and the newer sb_* keys may not be present in
+// this function's env, which made createClient() throw "supabaseKey is
+// required". We verify the caller by calling GoTrue directly instead.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,50 +31,58 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const candidates = [
-      Deno.env.get("IDIA_SECRET_KEY"),
-      Deno.env.get("IDIA_PUBLISHABLE_KEY"),
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-      Deno.env.get("SUPABASE_ANON_KEY"),
-      Deno.env.get("SUPABASE_PUBLISHABLE_KEY"),
-    ];
-    const SUPABASE_KEY = candidates.find(
-      (k): k is string => !!k && !isLegacySupabaseJwtKey(k),
-    );
-
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-      console.error("[life-pii-bridge] No usable Supabase key in env (IDIA_SECRET_KEY / IDIA_PUBLISHABLE_KEY missing or legacy JWT)");
-      return json({ error: "Server misconfigured: set IDIA_SECRET_KEY edge function secret" }, 500);
+    if (!SUPABASE_URL) {
+      console.error("[life-pii-bridge] SUPABASE_URL missing");
+      return json({ error: "Server misconfigured" }, 500);
     }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return json({ error: "Unauthorized" }, 401);
     }
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) return json({ error: "Unauthorized" }, 401);
 
-    const token = authHeader.replace("Bearer ", "");
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
+    // apikey: prefer whatever the caller sent (it already passed the gateway),
+    // else any non-legacy key available in env.
+    const apikey =
+      req.headers.get("apikey") ??
+      [
+        Deno.env.get("IDIA_PUBLISHABLE_KEY"),
+        Deno.env.get("SUPABASE_PUBLISHABLE_KEY"),
+        Deno.env.get("IDIA_SECRET_KEY"),
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+        Deno.env.get("SUPABASE_ANON_KEY"),
+      ].find((k): k is string => !!k && !isLegacySupabaseJwtKey(k)) ??
+      "";
+
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(apikey ? { apikey } : {}),
+      },
     });
 
-    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
-    if (userErr || !userData?.user) {
-      console.error("[life-pii-bridge] getUser failed", userErr);
+    if (!res.ok) {
+      console.error("[life-pii-bridge] getUser failed", res.status, await res.text());
       return json({ error: "Unauthorized" }, 401);
     }
 
-    const meta = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
-    const first_name =
-      (meta.first_name as string | undefined) ?? null;
-    const last_name =
-      (meta.last_name as string | undefined) ?? null;
+    const user = (await res.json()) as {
+      email?: string | null;
+      user_metadata?: Record<string, unknown> | null;
+    };
+
+    const meta = user.user_metadata ?? {};
+    const first_name = (meta.first_name as string | undefined) ?? null;
+    const last_name = (meta.last_name as string | undefined) ?? null;
     const full_name =
       (meta.full_name as string | undefined) ??
       (meta.display_name as string | undefined) ??
       ([first_name, last_name].filter(Boolean).join(" ") || null);
     const display_name =
       (meta.display_name as string | undefined) ?? full_name ?? null;
-    const email = userData.user.email ?? (meta.email as string | undefined) ?? null;
+    const email = user.email ?? (meta.email as string | undefined) ?? null;
 
     return json({ first_name, last_name, full_name, display_name, email });
   } catch (err) {
@@ -79,3 +90,4 @@ Deno.serve(async (req) => {
     return json({ error: "Internal server error" }, 500);
   }
 });
+
