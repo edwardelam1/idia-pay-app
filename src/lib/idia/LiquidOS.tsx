@@ -105,8 +105,8 @@ export function LiquidOS() {
     phase.kind === "operational" && uniqueScreens(phase.subModule).length >= 2;
 
   useEffect(() => {
-    const start: { x: number; y: number; t: number } | null = null;
-    let origin = start;
+    let origin: { x: number; y: number; t: number } | null = null;
+
 
     const down = (e: PointerEvent) => {
       origin = { x: e.clientX, y: e.clientY, t: Date.now() };
