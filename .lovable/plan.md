@@ -1,24 +1,44 @@
-## What's wrong
+## Goal
 
-The header count and the rendered tiles come from two different sources:
+Give each Nano-Bite container a localized brain: a Pico-Bite fires `onAction`, the container updates ephemeral state, and that state flows back down into every sibling's `config`. No Pico-Bite gains storage, context, or knowledge of its siblings — the contract in `src/lib/idia/pico-bite.ts` stays untouched.
 
-- The "1 Pico" badge reads `spec.picoBites` straight off the freshly hydrated blueprint (`src/lib/idia/LiquidOS.tsx:509`, mapped in `src/lib/idia/registry.ts:71-93`) — this is correct and current.
-- The tiles below come from `NanoBiteHost` → `fetchNanoPicoLayout()` (`src/lib/idia/nano-pico-resolver.ts`), which serves from an in-memory `CACHE` and a `sessionStorage` key `idia.nanoPico.layout.v3:<code>:<nanoId>`. Nothing ever purges those, and if the fresh blueprint has no picos for a nano bite the resolver deliberately falls back to the stale session copy (lines 124-194). So the old 4-pico layout keeps painting after the Hub cleanup.
+```text
+Numpad ──onAction──► NanoBiteHost reducer ──► runtime state
+                            │                      │
+                            └──► TelemetryBus       ▼
+                                 (flat ledger)  merged config ──► CartPane / SummaryBar / TipSelector
+```
 
-Also confirmed: `ProvisioningEngine` (`src/lib/provisioning-engine.ts`) has no `invalidateIfStale()` and never reads `manifestVersion`, so the Hub's new versioning is currently ignored on this side.
+## What gets built
 
-## Fix
+**1. `src/lib/idia/nano-runtime.ts` (new)** — the nervous system, pure and testable.
 
-1. **Single source for the dock.** Pass the already-resolved `spec.picoBites` from `LiquidOS` down into `NanoBiteHost` instead of having it re-fetch. The resolver keeps only its conflict logic (weight-per-slot winner, mandatory losers dimmed, non-mandatory losers hidden), refactored into a pure `resolveLayoutFromSpec(nanoBiteId, picos)`. Badge count and tile count then can't diverge.
+- `NanoRuntimeState`: ephemeral session shape — `lines[]`, `subtotal`, `tax`, `total`, `entryBuffer`, `tenderAmount`, `amountDue`, `tipAmount`, `customer`, `lastScan`, `selectedLineId`, `stage` (`building | tendering | complete`).
+- `nanoRuntimeReducer(state, event)` — switches on the canonical `pico.*` telemetry tag, not on component identity. Initial coverage of the Mobile POS sale loop:
+  - `pico.input.numpad` submit → sets `entryBuffer`/`tenderAmount`
+  - `pico.ui.item_grid` / `pico.ops.sku_lookup` select → append/increment a cart line
+  - `pico.ui.cart_pane` select_line → `selectedLineId`
+  - `pico.ui.discount_prompt`, `pico.ui.tip_selector` → adjust totals
+  - `pico.pay.cash_tender` / `pico.pay.split_tender` → decrement `amountDue`, set change due
+  - `pico.crm.customer_lookup` → `customer`
+  - `pico.input.barcode_scan` / `qr_scan` → `lastScan`
+  - unknown tags fall through unchanged (never throws — the catalog is 112 wide and will keep growing)
+- `projectConfig(tag, manifestConfig, state)` — merges derived state **over** the Hub-published config for the consuming tags (`cart_pane.lines`, `summary_bar` totals, `customer_display.amount`, `numpad.title`, `receipt_preview`, etc.). Manifest config remains the base so Hub authorship still wins for anything the runtime doesn't own.
 
-2. **Delete the stale caches.** Remove the module-level `CACHE` and the `sessionStorage` layout persistence from `nano-pico-resolver.ts` (and the `clearNanoPicoCache` plumbing that exists only to service it). Layout is derived per render from the manifest, so caching buys nothing and is exactly what caused the ghosts. Keep the async `loadPicoCatalog()` UUID→tag lookup for entries the Hub still ships without a `tag`.
+**2. `src/components/nanobites/NanoBiteHost.tsx`** — wire it in.
 
-3. **Honour `manifestVersion`.** Add `ProvisioningEngine.invalidateIfStale(incomingVersion)`: compare against the version stored alongside the cached blueprint under `idia_blueprint_v1`, and on mismatch clear the blueprint cache plus any leftover `idia.nanoPico.layout.*` session keys before writing the new payload. Call it inside `hydrateFromHub` right after the payload is validated, so a Hub redeploy propagates on the next boot without the operator having to re-pair the device.
+- `useReducer(nanoRuntimeReducer, initialNanoRuntime)`, reset whenever `nanoBiteId` changes (ephemeral per screen).
+- The existing `onEmit` keeps emitting to `TelemetryBus` exactly as today, and additionally `dispatch`es the same event locally — the ledger stays the single audit path; the reducer is a pure local projection.
+- `PicoSlot` receives `config={projectConfig(bite.tag, bite.config, state)}` instead of the raw manifest config.
 
-4. **Empty state means empty.** When the manifest carries zero picos for a nano bite, render the existing "No Pico-Bites published" state rather than reaching for a previous layout.
+**3. Cross-nano-bite reads (optional, same change)** — the reducer subscribes to `TelemetryBus` only for its own `nanoBiteId`, so two docks on screen never bleed into each other.
+
+## Deliberately not doing
+
+- No new tables, no writes beyond the existing flat `nano_bite_executions` ledger.
+- No mock/seed data: an empty cart renders the existing `SterileState`, exactly as now.
+- No change to `PicoBiteProps`, the registry, or the manifest resolver.
 
 ## Technical notes
 
-Files touched: `src/lib/idia/nano-pico-resolver.ts`, `src/components/nanobites/NanoBiteHost.tsx`, `src/lib/idia/LiquidOS.tsx`, `src/lib/provisioning-engine.ts`. No DB or edge-function changes — the Hub side is already deployed. Registry, telemetry bus, and the 112 pico components are untouched.
-
-Verification: after the change, load with `IDIA-FRWD-NEUL` and confirm each screen's badge equals the number of tiles rendered (`mobile_pos` = 3, `ops.prep` = 5 per the Hub's saved `picoAssignments`), with `localStorage`/`sessionStorage` pre-populated from the old manifest to prove the invalidation path works.
+Runtime state is intentionally ephemeral (in-memory, dies on navigate/reload) — persisting a half-built cart would require a Hub-owned order record, which is a separate decision. If you want carts to survive a screen switch, say so and I'll lift the reducer to a provider keyed by `cartonCode` instead.

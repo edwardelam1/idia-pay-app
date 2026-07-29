@@ -8,7 +8,12 @@
  * so every tap lands in the flat ledger. No local caching — a Hub redeploy
  * can never leave ghost tiles behind.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
+import {
+  initialNanoRuntime,
+  nanoRuntimeReducer,
+  projectConfig,
+} from "@/lib/idia/nano-runtime";
 import {
   resolveLayoutFromSpec,
   type ResolvedLayout,
@@ -43,6 +48,10 @@ export default function NanoBiteHost({
   const businessId = useActiveBusinessId();
   const shift = useShiftLock();
 
+  // Localized brain: ephemeral, in-memory, reset whenever the dock changes.
+  const [runtime, dispatch] = useReducer(nanoRuntimeReducer, initialNanoRuntime);
+
+
   // Legacy containers mount the dock without a spec; fall back to the live
   // cached manifest (never a persisted layout).
   const dock = useMemo(
@@ -53,6 +62,7 @@ export default function NanoBiteHost({
   useEffect(() => {
     let cancelled = false;
     setLayout(null);
+    dispatch({ tag: "nano.reset", payload: null });
     resolveLayoutFromSpec(nanoBiteId, dock).then((l) => {
       if (!cancelled) setLayout(l);
     });
@@ -60,6 +70,7 @@ export default function NanoBiteHost({
       cancelled = true;
     };
   }, [nanoBiteId, dock]);
+
 
 
   const visible = useMemo(() => layout?.bites ?? [], [layout]);
@@ -101,6 +112,7 @@ export default function NanoBiteHost({
           <PicoSlot
             key={b.tag}
             bite={b}
+            config={projectConfig(b.tag, b.config, runtime)}
             shiftLocked={!shift.ready}
             shiftReason={
               !shift.location
@@ -111,7 +123,8 @@ export default function NanoBiteHost({
                     ? "Location drift detected"
                     : undefined
             }
-            onEmit={(tag, payload) =>
+            onEmit={(tag, payload) => {
+              // Audit path: unchanged flat ledger emit.
               TelemetryBus.emit({
                 telemetryTag: tag,
                 picoBite: b.name,
@@ -121,9 +134,12 @@ export default function NanoBiteHost({
                 subModuleId: nanoBiteId,
                 nanoBiteId,
                 payload,
-              })
-            }
+              });
+              // Local projection: drives sibling Pico-Bites.
+              dispatch({ tag, payload, sourceConfig: b.config });
+            }}
           />
+
         ))}
       </div>
     </section>
@@ -134,11 +150,14 @@ const warned = new Set<string>();
 
 function PicoSlot({
   bite,
+  config,
   shiftLocked,
   shiftReason,
   onEmit,
 }: {
   bite: ResolvedPico;
+  /** Manifest config merged with live runtime state. */
+  config?: Record<string, unknown>;
   shiftLocked: boolean;
   shiftReason?: string;
   onEmit: (tag: string, payload: unknown) => void;
@@ -172,7 +191,7 @@ function PicoSlot({
     >
       <Component
         telemetryTag={bite.tag}
-        config={bite.config}
+        config={config ?? bite.config}
         onAction={onEmit}
         gateSatisfied={!gated}
         gateReason={gated ? shiftReason : undefined}
