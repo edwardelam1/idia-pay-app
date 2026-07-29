@@ -62,6 +62,7 @@ export default function NanoBiteHost({
   useEffect(() => {
     let cancelled = false;
     setLayout(null);
+    dispatch({ tag: "nano.reset", payload: null });
     resolveLayoutFromSpec(nanoBiteId, dock).then((l) => {
       if (!cancelled) setLayout(l);
     });
@@ -69,6 +70,7 @@ export default function NanoBiteHost({
       cancelled = true;
     };
   }, [nanoBiteId, dock]);
+
 
 
   const visible = useMemo(() => layout?.bites ?? [], [layout]);
