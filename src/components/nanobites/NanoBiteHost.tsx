@@ -150,11 +150,14 @@ const warned = new Set<string>();
 
 function PicoSlot({
   bite,
+  config,
   shiftLocked,
   shiftReason,
   onEmit,
 }: {
   bite: ResolvedPico;
+  /** Manifest config merged with live runtime state. */
+  config?: Record<string, unknown>;
   shiftLocked: boolean;
   shiftReason?: string;
   onEmit: (tag: string, payload: unknown) => void;
@@ -188,7 +191,7 @@ function PicoSlot({
     >
       <Component
         telemetryTag={bite.tag}
-        config={bite.config}
+        config={config ?? bite.config}
         onAction={onEmit}
         gateSatisfied={!gated}
         gateReason={gated ? shiftReason : undefined}
