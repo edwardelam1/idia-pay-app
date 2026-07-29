@@ -8,7 +8,12 @@
  * so every tap lands in the flat ledger. No local caching — a Hub redeploy
  * can never leave ghost tiles behind.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
+import {
+  initialNanoRuntime,
+  nanoRuntimeReducer,
+  projectConfig,
+} from "@/lib/idia/nano-runtime";
 import {
   resolveLayoutFromSpec,
   type ResolvedLayout,
