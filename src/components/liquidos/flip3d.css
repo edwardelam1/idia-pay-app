@@ -44,15 +44,14 @@
     0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
+/* The preview is decoration only — it must never intercept the tap that
+   commits the focused card. */
 .flip3d-card-inner {
   width: 100%;
   height: 100%;
   overflow: hidden;
   pointer-events: none;
-}
-
-.flip3d-card[data-focused="true"] .flip3d-card-inner {
-  pointer-events: auto;
+  user-select: none;
 }
 
 .flip3d-reflection {
