@@ -48,6 +48,10 @@ export default function NanoBiteHost({
   const businessId = useActiveBusinessId();
   const shift = useShiftLock();
 
+  // Localized brain: ephemeral, in-memory, reset whenever the dock changes.
+  const [runtime, dispatch] = useReducer(nanoRuntimeReducer, initialNanoRuntime);
+
+
   // Legacy containers mount the dock without a spec; fall back to the live
   // cached manifest (never a persisted layout).
   const dock = useMemo(
