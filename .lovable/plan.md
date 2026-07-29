@@ -1,56 +1,74 @@
-## What I verified
+## What's wrong today (verified)
 
-The blueprint cached in the terminal (`localStorage.idia_blueprint_v1`) does contain pico-bites for all 5 nano-bites (service_loc: 8, prep: 9, mobile_pos: 12, health: 8, restock: 7). So the Hub data is arriving. Two concrete mismatches stop them from painting:
+`src/components/pico-bites/registry.ts` maps all 112 canonical Hub tags, but only ~83 distinct components exist across 8 bundled category files. **34 tags are borrowing another tag's component** instead of having their own, e.g.:
 
-**1. The blueprint sends `tag: null`.** Every inline pico entry looks like:
+- `pico.ui.chart_pane` → SummaryBar
+- `pico.ui.category_tabs` → ModifierGrid
+- `pico.ui.search_bar`, `pico.crm.contact_capture`, `pico.crm.new_customer`, `pico.loyalty.referral_capture` → Keyboard
+- `pico.fleet.odometer_log`, `pico.health.dose_check` → Numpad
+- `pico.telemetry.water_meter`, `pico.telemetry.emissions_log` → IoTSensor
+- `pico.logic.event_publish`, `pico.logic.webhook_emit` → PushNotify
+- `pico.pay.ach_prompt` → CardTender, `pico.pay.deposit_capture` → CashTender, `pico.pay.currency_convert` → PriceDisplay, `pico.pay.invoice_send` → EmailBlast
+- `pico.ops.bin_scan` → BarcodeScan, `pico.ops.transfer_ticket` → StockAdjust, `pico.ops.batch_track` → RfidWrite, `pico.ops.par_alert` → AlarmBell
+- `pico.compliance.kyc_gate` → IdCheck, `pico.compliance.sig_capture` → SignaturePad, `pico.compliance.chain_of_custody` → ProvenanceStamp, `pico.compliance.permit_gate` → RuleGate, `pico.compliance.tax_holiday_flag` → FeatureFlag
+- `pico.output.kds_route` → KitchenPrinter, `pico.output.customer_display` → PriceDisplay, `pico.output.scale_display` → WeightScale
+- plus `pico.ui.ticket_ribbon` / `receipt_preview` / `kanban_board` all sharing OrderTicket, `pico.ui.upsell_carousel` → ItemGrid, `pico.ui.map_view` / `calendar_view` / `discount_prompt` / `split_check` / `tip_selector` / `notes_field` reaching across categories, `pico.sched.no_show_flag` → RescheduleFlow, `pico.sched.roster_pick` → ShiftPunch, `pico.sched.reminder` → CountdownTimer, `pico.logic.retry_backoff` → OfflineQueue, `pico.logic.state_machine` → IndicatorLight, `pico.logic.session_lock` → RelaySwitch.
+
+Also, the pasted reference input file is the intended fidelity standard — several current bites (notably `output.tsx`, 13 one-line components) are far thinner.
+
+## Goal
+
+Every one of the 112 canonical tags gets its own independently authored component in its own file, at the fidelity of the pasted `pico.input.*` reference. Registry becomes strictly 1:1 — no tag ever points at another tag's component.
+
+## Structure
 
 ```text
-{ "id": "cdc32b5c-…", "tag": null, "name": null, "slot": "schedule", "weight": 0.65, "mandatory": false }
+src/components/pico-bites/
+  _shared.tsx                 // GateOverlay, SterileState, HardwareTriggerNode,
+                              //  HardwareOutputNode, StatusRow — shared chrome only
+  input/pin-pad.tsx
+  input/numpad.tsx
+  ...                          (15 files)
+  output/...                   (11)
+  ui/...                       (18)
+  compliance/...               (13)
+  loyalty/...                  (5)
+  pay/...                      (11)
+  ops/...                      (8)
+  crm/...                      (5)
+  sched/...                    (4)
+  fleet/...                    (4)
+  health/...                   (4)
+  telemetry/...                (4)
+  logic/...                    (10)
+  index.ts                     // barrel re-export of all 112
+  registry.ts                  // 112 tags -> 112 distinct components + gate policy
 ```
 
-`nano-pico-resolver.ts` does `tag: p.tag || p.id`, so the resolved "tag" becomes a raw UUID (or a legacy dotted id like `hosp.ft.fleet.loc_lock`). `getPicoBite(uuid)` returns `null`, and `PicoSlot` returns `null` on a miss — so every slot renders nothing, silently.
+One file = one exported `*PicoBite`, typed with the existing `PicoBiteProps` from `src/lib/idia/pico-bite.ts`, using the standard `onAction(telemetryTag, payload)` contract, `gateSatisfied`/`gateReason` gate overlay, and rendering purely from blueprint `config`.
 
-**2. The local registry vocabulary is out of date.** `public.idia_pico_bites` holds the 112 canonical tags, and they don't match the keys hardcoded in `registry.ts`:
+## Rules held throughout
 
-```text
-DB                            registry.ts
-pico.input.barcode_scan   vs  pico.input.barcode
-pico.input.nfc_tap        vs  pico.input.nfc
-pico.crm.customer_lookup  vs  pico.crm.lookup
-pico.ui.item_grid         vs  pico.display.item_grid
-pico.pay.cash_tender      vs  pico.payment.cash_tender
-pico.ops.temperature_log  vs  pico.ops.temp_log
-```
+- **No mock data.** Any list/tile/amount-shaped bite with empty `config` renders `<SterileState/>`, never invented rows.
+- **No shared component across two tags.** Bites that are visually similar (e.g. water meter vs energy meter) get their own file with their own labels, units, icon, action verbs and payload shape.
+- Each bite emits a distinct, semantically correct action verb (`poll_scale`, `queue_webhook`, `log_odometer`, …) so the flat telemetry ledger stays meaningful.
+- Existing category files (`universal/*.tsx`) are deleted after the split; `registry.ts`, `nano-pico-resolver.ts`, `NanoBiteHost.tsx`, and `primitives.tsx` import paths are updated. `PICO_TAG_ALIASES` (legacy `hosp.ft.*` ids) stays as-is.
 
-Whole namespaces differ: the Hub uses `pico.ui.*`, `pico.pay.*`, `pico.sched.*`, `pico.telemetry.*`; the registry uses `pico.display.*`, `pico.payment.*`, `pico.schedule.*`, `pico.iot.*`. So even after fixing the UUID lookup, most tags would still miss.
+## Delivery order (each step compiles on its own)
 
-## Fix
+1. `_shared.tsx` chrome primitives + folder scaffold; registry left working.
+2. input (15), output (11), ui (18) — the highest-traffic surfaces.
+3. pay (11), loyalty (5), compliance (13).
+4. ops (8), crm (5), sched (4), fleet (4), health (4), telemetry (4), logic (10).
+5. Rewrite `registry.ts` as a strict 1:1 map; add a build-time assertion that no component appears twice and that all 112 catalog tags are covered.
+6. Delete the old `universal/` bundles, fix imports, typecheck.
 
-1. **Resolve UUID → tag from the Hub catalog**
-   - Add a small cached loader that reads `id, tag, name, category, gate_policy, default_slot` from `public.idia_pico_bites` once per session (sessionStorage-backed, keyed by provisioning code).
-   - In `nano-pico-resolver.ts`, when a blueprint entry has a null `tag`, resolve it by `id` through that catalog; take `name` from the catalog too when the blueprint's `name` is null (today the dock header would show blanks).
-   - Legacy dotted ids that aren't in the catalog keep their id as the tag and fall through to step 3.
+## Extra: catalog showcase route
 
-2. **Re-key the component registry to the Hub's canonical vocabulary**
-   - Rename registry keys in `src/components/pico-bites/registry.ts` to exactly the 112 tags in `idia_pico_bites` (`pico.ui.*`, `pico.pay.*`, `pico.sched.*`, `pico.telemetry.*`, `pico.input.*_scan`, etc.), pointing at the existing universal components.
-   - Add an alias table for the legacy dotted food-truck ids still present in the blueprint (e.g. `hosp.ft.fleet.loc_lock`, `hosp.ft.fleet.time_punch`) mapping to their canonical `pico.*` equivalents.
-   - Canonical tags with no component yet get a small explicit "Not yet implemented" tile rather than being dropped.
+Add `/pico-catalog` (its own route file, own `head()` metadata) rendering every registered bite grouped by namespace with its tag label and a console-logging telemetry handler — the same idea as the `InputPicoBitesShowcase` you pasted, but driven off the registry so it can never drift from what's installed. This gives a single screen to visually verify all 112 exist independently.
 
-3. **Never fail silently**
-   - `PicoSlot` in `NanoBiteHost.tsx` currently returns `null` for an unknown tag. Change it to render a sterile "Unmapped: `<tag>`" tile and `console.warn` once, so a vocabulary drift is visible instead of producing a blank screen.
-   - `NanoBiteHost` also returns `null` when the resolved list is empty; replace with an explicit empty state naming the nano-bite.
+## Technical notes
 
-4. **Cache invalidation**
-   - The resolver caches per nano-bite in memory and sessionStorage under `idia.nanoPico.layout.v2`. Bump to `v3` so stale empty layouts from the current broken state don't survive the fix.
-
-5. **Verify in preview**
-   - Confirm Mobile POS shows 12 pico tiles, Prep 9, Service Loc 8, Health 8, Restock 7, with real names from the catalog, and that taps still emit through `TelemetryBus`.
-
-No mock or seed data is introduced — every tag, name, slot and weight continues to come from the Hub blueprint and `idia_pico_bites`.
-
-## Files to change
-
-- `src/lib/idia/nano-pico-resolver.ts`
-- `src/components/pico-bites/registry.ts`
-- `src/components/nanobites/NanoBiteHost.tsx`
-- new: a small pico catalog loader under `src/lib/idia/`
+- `PicoBiteProps` and the `onAction(tag, payload)` signature are unchanged, so `NanoBiteHost` and `LiquidOS` rendering paths need no behavioural change — only import paths.
+- The registry stays the sole tag→component authority; `getPicoBite`/`canonicalPicoTag` signatures unchanged.
+- Unmapped tags continue to render the visible "Unmapped" tile in `NanoBiteHost`, which after this work should never appear for a Hub-published tag.

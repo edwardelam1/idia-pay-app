@@ -9,8 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PicoCatalogRouteImport } from './routes/pico-catalog'
 import { Route as IndexRouteImport } from './routes/index'
 
+const PicoCatalogRoute = PicoCatalogRouteImport.update({
+  id: '/pico-catalog',
+  path: '/pico-catalog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +25,39 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/pico-catalog': typeof PicoCatalogRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/pico-catalog': typeof PicoCatalogRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/pico-catalog': typeof PicoCatalogRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/pico-catalog'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/pico-catalog'
+  id: '__root__' | '/' | '/pico-catalog'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PicoCatalogRoute: typeof PicoCatalogRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/pico-catalog': {
+      id: '/pico-catalog'
+      path: '/pico-catalog'
+      fullPath: '/pico-catalog'
+      preLoaderRoute: typeof PicoCatalogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,6 +70,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PicoCatalogRoute: PicoCatalogRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
