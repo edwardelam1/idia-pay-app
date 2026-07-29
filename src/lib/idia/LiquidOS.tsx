@@ -95,42 +95,61 @@ export function LiquidOS() {
 
 
 
-  // Mid-screen horizontal swipe → open Flip 3D switcher (mobile gesture)
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    setTouchStart({ x: t.clientX, y: t.clientY, t: Date.now() });
-  };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStart) return;
-    const end = e.changedTouches[0];
-    const dx = end.clientX - touchStart.x;
-    const dy = end.clientY - touchStart.y;
-    const dt = Date.now() - touchStart.t;
-    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-    const midBandTop = vh * 0.3;
-    const midBandBottom = vh * 0.7;
-    const inMidBand = touchStart.y >= midBandTop && touchStart.y <= midBandBottom;
-    const horizontal = Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
-    const quick = dt < 500;
+  // Horizontal swipe → open Flip 3D switcher (mobile gesture).
+  //
+  // Listeners are bound on the document in the CAPTURE phase so the gesture
+  // is seen before scrollable Nano-Bite panels or the Pico dock consume it.
+  // Intent is decided purely by direction (never by screen position), so a
+  // vertical scroll passes straight through untouched.
+  const flipEligible =
+    phase.kind === "operational" && uniqueScreens(phase.subModule).length >= 2;
 
-    // Priority 1: middle-band horizontal swipe opens Flip 3D
-    if (
-      phase.kind === "operational" &&
-      uniqueScreens(phase.subModule).length >= 2 &&
-      inMidBand &&
-      horizontal &&
-      quick
-    ) {
-      setFlipOpen(true);
-      setTouchStart(null);
-      return;
-    }
+  useEffect(() => {
+    const start: { x: number; y: number; t: number } | null = null;
+    let origin = start;
 
-    // Priority 2: sidebar edge-swipe fallback
-    if (dx < -50) setIsSidebarOpen(false);
-    else if (dx > 50 && touchStart.x < 40) setIsSidebarOpen(true);
-    setTouchStart(null);
-  };
+    const down = (e: PointerEvent) => {
+      origin = { x: e.clientX, y: e.clientY, t: Date.now() };
+    };
+
+    const up = (e: PointerEvent) => {
+      const o = origin;
+      origin = null;
+      if (!o) return;
+      const dx = e.clientX - o.x;
+      const dy = e.clientY - o.y;
+      const dt = Date.now() - o.t;
+      const vw = window.innerWidth;
+      const fromEdge = o.x < 24 || o.x > vw - 24;
+      const horizontal = Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2;
+      const quick = dt < 700;
+
+      // Priority 1: horizontal intent anywhere, or an edge drag, opens Flip 3D.
+      if (flipEligible && quick && (horizontal || (fromEdge && Math.abs(dx) > 40))) {
+        // Left-edge drag toward the right is the sidebar gesture; keep it.
+        if (o.x < 40 && dx > 50) {
+          setIsSidebarOpen(true);
+          return;
+        }
+        setFlipOpen(true);
+        return;
+      }
+
+      // Priority 2: sidebar fallback.
+      if (dx < -50 && Math.abs(dx) > Math.abs(dy)) setIsSidebarOpen(false);
+      else if (dx > 50 && o.x < 40) setIsSidebarOpen(true);
+    };
+
+    document.addEventListener("pointerdown", down, { capture: true });
+    document.addEventListener("pointerup", up, { capture: true });
+    document.addEventListener("pointercancel", up, { capture: true });
+    return () => {
+      document.removeEventListener("pointerdown", down, { capture: true });
+      document.removeEventListener("pointerup", up, { capture: true });
+      document.removeEventListener("pointercancel", up, { capture: true });
+    };
+  }, [flipEligible]);
+
 
   function chooseSubModule(sm: SubModule, carton: VerticalCarton) {
     setActiveScreen(uniqueScreens(sm)[0] ?? null);
