@@ -113,6 +113,27 @@ function normalizePayload(code: string, payload: Record<string, unknown>): Verti
   return { provisioningCode: code, industry, subModules, raw: payload };
 }
 
+/**
+ * Look up a nano bite's authoritative Pico dock from the currently cached
+ * manifest. Used by the legacy hospitality containers, which mount the dock
+ * without carrying a `NanoBiteSpec`. Reads the live blueprint only — never a
+ * persisted layout — so stale docks cannot survive a Hub redeploy.
+ */
+export function picosForNanoBite(nanoBiteId: string): BlueprintPicoBite[] {
+  const bp = ProvisioningEngine.loadCached() as unknown as
+    | Record<string, unknown>
+    | null;
+  if (!bp) return [];
+  const payload = (bp.modules as Record<string, unknown>) || bp;
+  const bundles = (payload.bundles as Array<Record<string, unknown>>) || [];
+  for (const bundle of bundles) {
+    const sub = normalizeBundle(bundle, 0);
+    const match = sub.nanoBites.find((nb) => nb.id === nanoBiteId);
+    if (match) return match.picoBites ?? [];
+  }
+  return [];
+}
+
 export async function fetchProvisioningBlueprint(
   code: string,
 ): Promise<VerticalCarton | null> {
