@@ -163,6 +163,10 @@ export function nanoRuntimeReducer(
       : state;
 
   switch (event.tag) {
+    // ── Container lifecycle ───────────────────────────────────────
+    case "nano.reset":
+      return initialNanoRuntime;
+
     // ── Value entry ───────────────────────────────────────────────
     case "pico.input.numpad":
     case "pico.input.pin_pad":
