@@ -112,9 +112,14 @@ export class ProvisioningEngine {
       }
 
       const blueprint = payloadObj as unknown as PayAppBlueprint;
+      const version =
+        (envelope as Record<string, unknown>).manifestVersion ??
+        (payloadObj as Record<string, unknown> | null)?.["manifestVersion"];
+      this.invalidateIfStale(version);
       if (typeof window !== "undefined") {
         window.localStorage.setItem(this.STORAGE_KEY, JSON.stringify(blueprint));
       }
+
 
       console.info(`[SUCCESS] [${LOG_ID}] Hydration successful from Hub.`);
       return blueprint;
