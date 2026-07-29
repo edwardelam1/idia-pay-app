@@ -1,29 +1,30 @@
 /**
- * Nano-Bite ↔ Pico-Bite resolver — blueprint-first.
+ * Nano-Bite ↔ Pico-Bite resolver — manifest-only, cache-free.
  *
- * The Hub now embeds the authoritative Pico-Bite dock inline in each
+ * The Hub embeds the authoritative Pico-Bite dock inline in each
  * `modules.bundles[].nanoBites[].picoBites[]` entry of the hydrated
- * manifest (`idia_schema_manifest_vault.schema_payload`). This resolver
- * reads that payload from the cached blueprint (populated by
- * `ProvisioningEngine.hydrateFromHub`) and applies the same conflict
- * rules the old DB-driven path used:
+ * manifest. `src/lib/idia/registry.ts` normalizes that into
+ * `NanoBiteSpec.picoBites`, and this module turns that list into a
+ * render-ready layout by applying the conflict rules:
  *   - Highest `weight` per `slot` wins → rendered normally.
  *   - Losers with `mandatory=true` render dimmed (with "Overridden by …").
  *   - Losers with `mandatory=false` are hidden.
  *   - Untagged slots never conflict.
  *
- * `gate_policy` and `default_config` come from the flat client
- * `PICO_BITE_REGISTRY`, so no extra network round-trip is needed to
- * paint the dock. A legacy `idia_nano_pico_relations` fallback fires
- * only if the blueprint has no inline dock for a given nano bite AND
- * a session cache miss — this keeps first-boot before hydration alive.
+ * There is deliberately NO cache here (no module map, no sessionStorage).
+ * Layout is derived from the live manifest on every render, so a Hub
+ * redeploy can never leave ghost tiles behind.
+ *
+ * `gate_policy` comes from the flat client `PICO_BITE_REGISTRY`. Entries
+ * the Hub still ships without a `tag` (bare UUIDs) are translated through
+ * the published pico catalog.
  */
-import { ProvisioningEngine } from "@/lib/provisioning-engine";
 import {
   PICO_BITE_REGISTRY,
   canonicalPicoTag,
 } from "@/components/pico-bites/registry";
 import { loadPicoCatalog, type PicoCatalogEntry } from "@/lib/idia/pico-catalog";
+import type { BlueprintPicoBite } from "@/lib/idia/registry";
 
 export type ResolvedPico = {
   tag: string;
@@ -41,36 +42,6 @@ export type ResolvedLayout = {
   nanoBiteId: string;
   bites: ResolvedPico[];
 };
-
-const CACHE = new Map<string, ResolvedLayout>();
-const SS_KEY = "idia.nanoPico.layout.v3";
-
-function sessionKey(nanoBiteId: string): string {
-  const code =
-    (typeof window !== "undefined" &&
-      ProvisioningEngine.loadCached()?.provisioningCode) ||
-    "unknown";
-  return `${SS_KEY}:${code}:${nanoBiteId}`;
-}
-
-function readSession(nanoBiteId: string): ResolvedLayout | null {
-  if (typeof sessionStorage === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(sessionKey(nanoBiteId));
-    return raw ? (JSON.parse(raw) as ResolvedLayout) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeSession(layout: ResolvedLayout) {
-  if (typeof sessionStorage === "undefined") return;
-  try {
-    sessionStorage.setItem(sessionKey(layout.nanoBiteId), JSON.stringify(layout));
-  } catch {
-    /* ignore quota */
-  }
-}
 
 type IncomingPico = {
   tag: string;
@@ -121,85 +92,38 @@ function resolveConflicts(nanoBiteId: string, rows: IncomingPico[]): ResolvedLay
   return { nanoBiteId, bites };
 }
 
-async function fromBlueprint(nanoBiteId: string): Promise<ResolvedLayout | null> {
-  const bp = ProvisioningEngine.loadCached();
-  if (!bp) return null;
-  const modules = (bp as unknown as { modules?: Record<string, unknown> }).modules;
-  const bundles = (modules?.bundles as Array<Record<string, unknown>>) ?? [];
-  for (const bundle of bundles) {
-    const bites = (bundle.nanoBites as Array<Record<string, unknown>>) ?? [];
-    const match = bites.find((nb) => (nb.id as string) === nanoBiteId);
-    if (!match) continue;
-    const picos = (match.picoBites as Array<Record<string, unknown>>) ?? [];
-    if (picos.length === 0) return null;
-
-    // The Hub currently emits `tag: null` / `name: null`; only `id` is
-    // authoritative. Translate through the published catalog.
-    const needsCatalog = picos.some((p) => !p.tag || !p.name);
-    const catalog = needsCatalog
-      ? await loadPicoCatalog()
-      : new Map<string, PicoCatalogEntry>();
-
-    const rows: IncomingPico[] = picos
-      .map((p) => {
-        const id = (p.id as string) ?? "";
-        const entry = catalog.get(id);
-        const rawTag = ((p.tag as string) || entry?.tag || id) ?? "";
-        const tag = canonicalPicoTag(rawTag);
-        return {
-          tag,
-          name: ((p.name as string) || entry?.name || tag) ?? "",
-          slot: ((p.slot as string) || entry?.default_slot) ?? null,
-          weight: typeof p.weight === "number" ? (p.weight as number) : 10,
-          mandatory: Boolean(p.mandatory),
-          config: (p.config as Record<string, unknown>) ?? null,
-        };
-      })
-      .filter((r) => Boolean(r.tag));
-    return resolveConflicts(nanoBiteId, rows);
-  }
-  return null;
-}
-
-
-// Legacy `idia_nano_pico_relations` fallback removed — that table has been
-// dropped now that the Hub blueprint is the sole source of truth.
-
-export async function fetchNanoPicoLayout(
+/**
+ * Pure resolver: manifest pico list → render-ready layout.
+ * The only async work is the catalog lookup for entries the Hub shipped
+ * without a human tag/name.
+ */
+export async function resolveLayoutFromSpec(
   nanoBiteId: string,
+  picos: BlueprintPicoBite[] | undefined,
 ): Promise<ResolvedLayout> {
-  if (CACHE.has(nanoBiteId)) return CACHE.get(nanoBiteId)!;
+  if (!picos || picos.length === 0) return { nanoBiteId, bites: [] };
 
-  const fromBp = await fromBlueprint(nanoBiteId);
-  if (fromBp) {
-    console.info(
-      `[nano-pico-resolver] source=blueprint nano=${nanoBiteId} bites=${fromBp.bites.length}`,
-    );
-    CACHE.set(nanoBiteId, fromBp);
-    writeSession(fromBp);
-    return fromBp;
-  }
-
-  const cached = readSession(nanoBiteId);
-  if (cached) {
-    CACHE.set(nanoBiteId, cached);
-    return cached;
-  }
-
-  console.info(
-    `[nano-pico-resolver] source=empty nano=${nanoBiteId} (no blueprint cached)`,
+  const needsCatalog = picos.some(
+    (p) => !p.name || !PICO_BITE_REGISTRY[canonicalPicoTag(p.tag)],
   );
-  const empty: ResolvedLayout = { nanoBiteId, bites: [] };
-  CACHE.set(nanoBiteId, empty);
-  return empty;
-}
+  const catalog = needsCatalog
+    ? await loadPicoCatalog()
+    : new Map<string, PicoCatalogEntry>();
 
-export function clearNanoPicoCache() {
-  CACHE.clear();
-  if (typeof sessionStorage !== "undefined") {
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const k = sessionStorage.key(i);
-      if (k && k.startsWith(`${SS_KEY}:`)) sessionStorage.removeItem(k);
-    }
-  }
+  const rows: IncomingPico[] = picos
+    .map((p) => {
+      const entry = catalog.get(p.tag);
+      const tag = canonicalPicoTag(entry?.tag || p.tag);
+      return {
+        tag,
+        name: p.name || entry?.name || tag,
+        slot: p.slot ?? entry?.default_slot ?? null,
+        weight: typeof p.weight === "number" ? p.weight : 10,
+        mandatory: Boolean(p.mandatory),
+        config: p.config ?? null,
+      };
+    })
+    .filter((r) => Boolean(r.tag));
+
+  return resolveConflicts(nanoBiteId, rows);
 }
