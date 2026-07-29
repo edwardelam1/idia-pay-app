@@ -200,7 +200,9 @@ export class ProvisioningEngine {
     console.info(`[BEGIN] [${LOG_ID}] Operator initiated terminal uncoupling.`);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(this.STORAGE_KEY);
+      window.localStorage.removeItem(this.VERSION_KEY);
     }
+
     console.info(`[SUCCESS] [${LOG_ID}] Local blueprint cache cleared.`);
   }
 }
