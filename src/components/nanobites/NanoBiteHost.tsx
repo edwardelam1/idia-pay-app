@@ -1,17 +1,20 @@
 /**
- * NanoBiteHost — DB-driven Pico-Bite dock for a Nano-Bite container.
+ * NanoBiteHost — manifest-driven Pico-Bite dock for a Nano-Bite container.
  *
- * Renders the resolved Pico-Bites for a given `nanoBiteId` beneath a
- * container's bespoke chrome. Winners render fully; mandatory losers
- * render dimmed with a "Overridden by …" tooltip. Everything is wired
- * through the TelemetryBus so every tap lands in the flat ledger.
+ * The dock renders exactly the Pico-Bites the Hub manifest published for
+ * this nano bite (passed in as `picos`), after conflict resolution:
+ * winners render fully; mandatory losers render dimmed with an
+ * "Overridden by …" tooltip. Everything is wired through the TelemetryBus
+ * so every tap lands in the flat ledger. No local caching — a Hub redeploy
+ * can never leave ghost tiles behind.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  fetchNanoPicoLayout,
+  resolveLayoutFromSpec,
   type ResolvedLayout,
   type ResolvedPico,
 } from "@/lib/idia/nano-pico-resolver";
+import type { BlueprintPicoBite } from "@/lib/idia/registry";
 import { getPicoBite } from "@/components/pico-bites/registry";
 import { TelemetryBus } from "@/lib/idia/telemetry-bus";
 import { useShiftLock } from "@/components/pico-bites/primitives";
@@ -19,6 +22,8 @@ import { useActiveBusinessId } from "@/lib/idia/ActiveBusinessContext";
 
 type Props = {
   nanoBiteId: string;
+  /** Authoritative dock from the hydrated Hub manifest. */
+  picos?: BlueprintPicoBite[];
   cartonCode?: string;
   className?: string;
   title?: string;
@@ -26,6 +31,7 @@ type Props = {
 
 export default function NanoBiteHost({
   nanoBiteId,
+  picos,
   cartonCode = "",
   className,
   title = "Live Inputs",
@@ -36,13 +42,14 @@ export default function NanoBiteHost({
 
   useEffect(() => {
     let cancelled = false;
-    fetchNanoPicoLayout(nanoBiteId).then((l) => {
+    setLayout(null);
+    resolveLayoutFromSpec(nanoBiteId, picos).then((l) => {
       if (!cancelled) setLayout(l);
     });
     return () => {
       cancelled = true;
     };
-  }, [nanoBiteId]);
+  }, [nanoBiteId, picos]);
 
   const visible = useMemo(() => layout?.bites ?? [], [layout]);
 
@@ -55,6 +62,7 @@ export default function NanoBiteHost({
       </div>
     );
   }
+
 
   if (visible.length === 0) {
     return (
