@@ -22,10 +22,12 @@ async function currentUserId(): Promise<string | null> {
   }
 }
 
-function scopeFilter(
-  query: ReturnType<typeof supabase.from>["select"] extends never ? never : any,
-  businessId: string | null,
-) {
+type ScopedQuery<T> = {
+  eq(column: string, value: string): T;
+  is(column: string, value: null): T;
+};
+
+function scopeFilter<T extends ScopedQuery<T>>(query: T, businessId: string | null): T {
   return businessId
     ? query.eq("business_id", businessId)
     : query.is("business_id", null);
