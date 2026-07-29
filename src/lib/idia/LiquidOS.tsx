@@ -527,10 +527,12 @@ function BlueprintNanoBiteSurface({
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
         <NanoBiteHost
           nanoBiteId={spec.id}
+          picos={spec.picoBites}
           cartonCode={cartonCode}
           title="Pico-Bites"
           className="min-h-full"
         />
+
       </div>
     </div>
   );

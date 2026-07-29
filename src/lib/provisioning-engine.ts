@@ -112,9 +112,14 @@ export class ProvisioningEngine {
       }
 
       const blueprint = payloadObj as unknown as PayAppBlueprint;
+      const version =
+        (envelope as Record<string, unknown>).manifestVersion ??
+        (payloadObj as Record<string, unknown> | null)?.["manifestVersion"];
+      this.invalidateIfStale(version);
       if (typeof window !== "undefined") {
         window.localStorage.setItem(this.STORAGE_KEY, JSON.stringify(blueprint));
       }
+
 
       console.info(`[SUCCESS] [${LOG_ID}] Hydration successful from Hub.`);
       return blueprint;
@@ -142,6 +147,41 @@ export class ProvisioningEngine {
     }
   }
 
+  static readonly VERSION_KEY = "idia_blueprint_manifest_version";
+
+  /**
+   * Purge the local blueprint cache when the Hub publishes a new
+   * `manifestVersion`. Keeps a device paired while guaranteeing the next
+   * deploy propagates instead of painting ghosts from the previous manifest.
+   */
+  static invalidateIfStale(incomingVersion: unknown): boolean {
+    if (typeof window === "undefined") return false;
+    const incoming =
+      incomingVersion === null || incomingVersion === undefined
+        ? null
+        : String(incomingVersion);
+    if (!incoming) return false;
+
+    const known = window.localStorage.getItem(this.VERSION_KEY);
+    if (known === incoming) return false;
+
+    window.localStorage.removeItem(this.STORAGE_KEY);
+    // Drop any layout/catalog scratch written by earlier manifests.
+    if (typeof sessionStorage !== "undefined") {
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const k = sessionStorage.key(i);
+        if (k && (k.startsWith("idia.nanoPico.layout.") || k.startsWith("idia.picoCatalog."))) {
+          sessionStorage.removeItem(k);
+        }
+      }
+    }
+    window.localStorage.setItem(this.VERSION_KEY, incoming);
+    console.info(
+      `[ProvisioningEngine] manifestVersion changed (${known ?? "none"} → ${incoming}); local caches purged.`,
+    );
+    return true;
+  }
+
   static loadCached(): PayAppBlueprint | null {
     try {
       if (typeof window === "undefined") return null;
@@ -154,12 +194,15 @@ export class ProvisioningEngine {
     }
   }
 
+
   static wipeDevice(): void {
     const LOG_ID = `WIPE_${Date.now()}`;
     console.info(`[BEGIN] [${LOG_ID}] Operator initiated terminal uncoupling.`);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(this.STORAGE_KEY);
+      window.localStorage.removeItem(this.VERSION_KEY);
     }
+
     console.info(`[SUCCESS] [${LOG_ID}] Local blueprint cache cleared.`);
   }
 }
