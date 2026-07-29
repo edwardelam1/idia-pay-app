@@ -200,11 +200,8 @@ export function LiquidOS() {
   if (phase.kind === "selection") {
     const looped = [...phase.carton.subModules, ...phase.carton.subModules];
     return (
-      <div
-        className="h-screen overflow-hidden flex bg-[#FBFBFD] relative"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div className="h-screen overflow-hidden flex bg-[#FBFBFD] relative">
+
         <aside
           className={`w-72 shrink-0 border-r border-border fixed inset-y-0 left-0 z-50 h-screen flex flex-col transition-transform duration-300 ease-in-out shadow-[10px_0_40px_rgba(0,0,0,0.05)] ${
             isSidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -289,11 +286,8 @@ export function LiquidOS() {
     .sort((a, b) => a.order - b.order);
 
   return (
-    <div
-      className="h-screen overflow-hidden flex bg-[#FBFBFD] relative"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="h-screen overflow-hidden flex bg-[#FBFBFD] relative">
+
       <aside
         className={`w-64 shrink-0 border-r border-border p-5 flex flex-col gap-2 fixed inset-y-0 left-0 z-50 h-screen transition-transform duration-300 ease-in-out shadow-[10px_0_40px_rgba(0,0,0,0.05)] ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
