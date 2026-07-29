@@ -55,7 +55,7 @@ export function LiquidOS() {
   const [activeScreen, setActiveScreen] = useState<string | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number; t: number } | null>(null);
+  
   const [flipOpen, setFlipOpen] = useState(false);
 
   useEffect(() => {
