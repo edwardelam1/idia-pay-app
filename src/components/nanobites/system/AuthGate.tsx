@@ -119,14 +119,34 @@ function AuthGateCore({ onUnprovisionDevice }: AuthGateProps) {
     setIsProcessing(true);
 
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: otp,
-        type: "email",
-      });
-      if (error) throw error;
+      // GoTrue scopes a 6-digit code to the template that issued it. Depending on
+      // whether the mail that landed was a magic-link, signup or recovery mail, the
+      // same digits only verify under the matching type — a mismatch reports
+      // "otp_expired" even for a perfectly valid, unused code. Try each in turn.
+      const types = ["email", "magiclink", "recovery", "signup"] as const;
+      let lastError: unknown = null;
+      let verified = false;
+
+      for (const type of types) {
+        const { error } = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: otp,
+          type,
+        });
+        if (!error) {
+          verified = true;
+          break;
+        }
+        lastError = error;
+        // Only a type mismatch is worth retrying; stop on rate limits or hard failures.
+        const status = (error as { status?: number }).status;
+        if (status === 429) break;
+      }
+
+      if (!verified) throw lastError;
       toast.success("Clearance granted. Deploying terminal...");
       // Success triggers onAuthStateChange in TenancyProvider.
+
     } catch (err: unknown) {
       logPlanck("STALL", "AUTH_VERIFY", "Verification failed.", err);
       const e = err as { status?: number; code?: string; message?: string };
