@@ -14,7 +14,10 @@ import {
   type ResolvedLayout,
   type ResolvedPico,
 } from "@/lib/idia/nano-pico-resolver";
-import type { BlueprintPicoBite } from "@/lib/idia/registry";
+import {
+  picosForNanoBite,
+  type BlueprintPicoBite,
+} from "@/lib/idia/registry";
 import { getPicoBite } from "@/components/pico-bites/registry";
 import { TelemetryBus } from "@/lib/idia/telemetry-bus";
 import { useShiftLock } from "@/components/pico-bites/primitives";
@@ -40,16 +43,24 @@ export default function NanoBiteHost({
   const businessId = useActiveBusinessId();
   const shift = useShiftLock();
 
+  // Legacy containers mount the dock without a spec; fall back to the live
+  // cached manifest (never a persisted layout).
+  const dock = useMemo(
+    () => picos ?? picosForNanoBite(nanoBiteId),
+    [picos, nanoBiteId],
+  );
+
   useEffect(() => {
     let cancelled = false;
     setLayout(null);
-    resolveLayoutFromSpec(nanoBiteId, picos).then((l) => {
+    resolveLayoutFromSpec(nanoBiteId, dock).then((l) => {
       if (!cancelled) setLayout(l);
     });
     return () => {
       cancelled = true;
     };
-  }, [nanoBiteId, picos]);
+  }, [nanoBiteId, dock]);
+
 
   const visible = useMemo(() => layout?.bites ?? [], [layout]);
 
