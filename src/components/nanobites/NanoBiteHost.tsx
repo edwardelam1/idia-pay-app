@@ -112,6 +112,7 @@ export default function NanoBiteHost({
           <PicoSlot
             key={b.tag}
             bite={b}
+            config={projectConfig(b.tag, b.config, runtime)}
             shiftLocked={!shift.ready}
             shiftReason={
               !shift.location
@@ -122,7 +123,8 @@ export default function NanoBiteHost({
                     ? "Location drift detected"
                     : undefined
             }
-            onEmit={(tag, payload) =>
+            onEmit={(tag, payload) => {
+              // Audit path: unchanged flat ledger emit.
               TelemetryBus.emit({
                 telemetryTag: tag,
                 picoBite: b.name,
@@ -132,9 +134,12 @@ export default function NanoBiteHost({
                 subModuleId: nanoBiteId,
                 nanoBiteId,
                 payload,
-              })
-            }
+              });
+              // Local projection: drives sibling Pico-Bites.
+              dispatch({ tag, payload, sourceConfig: b.config });
+            }}
           />
+
         ))}
       </div>
     </section>
